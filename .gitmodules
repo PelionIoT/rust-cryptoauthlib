@@ -1,0 +1,4 @@
+[submodule "cryptoauthlib-sys/cryptoauthlib"]
+	path = cryptoauthlib-sys/cryptoauthlib
+	url = https://github.com/MicrochipTech/cryptoauthlib.git
+	branch = Release/v3.1.x
