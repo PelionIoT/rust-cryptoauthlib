@@ -1,2 +1,5 @@
 [workspace]
 members = ["cryptoauthlib-sys", "cryptoauthlib"]
+
+[profile.release]
+opt-level = "s"
