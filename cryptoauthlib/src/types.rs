@@ -1,3 +1,48 @@
+
+pub struct AtcaIfaceCfg {
+    pub iface_type: AtcaIfaceType,
+    pub devtype: AtcaDeviceType,
+    pub iface: AtcaIface,
+    pub wake_delay: u16,
+    pub rx_retries: i32,
+} // pub struct AtcaIfaceCfg
+
+
+pub union AtcaIface {
+    pub atcai2c: AtcaIfaceI2c,
+    // pub atcaswi: AtcaIfaceSwi,
+    // pub atcauart: AtcaIfaceUart,
+    // pub atcahid: AtcaIfaceHid,
+} // pub union AtcaIface
+
+#[derive(Copy, Clone)]
+pub struct AtcaIfaceI2c {
+    pub slave_address: u8,
+    pub bus: u8,
+    pub baud: u32,
+} // pub struct AtcaIfaceI2c
+
+
+pub enum AtcaIfaceType {
+    AtcaI2cIface,
+    AtcaSwiIface,
+    AtcaUartIface,
+    AtcaSpiIface,
+    AtcaHidIface,
+    AtcaCustomIface,
+    AtcaUnknownIface,
+} // pub enum AtcaIfaceType
+
+#[doc = " \\brief The supported Device type in Cryptoauthlib library"]
+pub enum AtcaDeviceType {
+    ATSHA204A,
+    ATECC108A,
+    ATECC508A,
+    ATECC608A,
+    ATSHA206A,
+    AtcaDevUnknown,
+} // pub enum AtcaDeviceType
+
 pub enum AtcaStatus {
     #[doc = "!< Function succeeded."]
     AtcaSuccess,
@@ -73,8 +118,4 @@ pub enum AtcaStatus {
     AtcaUseFlagsConsumed,
     #[doc = "!< Unknown error occured"]
     AtcaUnknown,
-}
-
-// pub struct AtcaInferfaceCfg {
-
-// }
+} // pub enum AtcaStatus
