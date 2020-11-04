@@ -1,0 +1,10 @@
+[device]
+device_type = "atecc608a"
+iface_type = "i2c"
+wake_delay = 1500
+rx_retries = 20
+
+[interface]
+slave_address = 0xc0
+bus = 2
+baud = 400000

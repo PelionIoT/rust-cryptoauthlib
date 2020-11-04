@@ -22,7 +22,7 @@ pub struct AtcaIfaceI2c {
     pub baud: u32,
 } // pub struct AtcaIfaceI2c
 
-
+#[derive(Copy, Clone)]
 pub enum AtcaIfaceType {
     AtcaI2cIface,
     AtcaSwiIface,
@@ -44,6 +44,7 @@ pub enum AtcaDeviceType {
 } // pub enum AtcaDeviceType
 
 /// Return status for ATCA functions
+#[derive(Debug)]
 pub enum AtcaStatus {
     /// Function succeeded.
     AtcaSuccess,
