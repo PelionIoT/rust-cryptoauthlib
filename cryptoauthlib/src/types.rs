@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate strum_macros; // 0.10.0
 
 pub struct AtcaIfaceCfg {
     pub iface_type: AtcaIfaceType,
@@ -22,7 +24,7 @@ pub struct AtcaIfaceI2c {
     pub baud: u32,
 } // pub struct AtcaIfaceI2c
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Display)]
 pub enum AtcaIfaceType {
     AtcaI2cIface,
     AtcaSwiIface,
@@ -34,6 +36,7 @@ pub enum AtcaIfaceType {
 } // pub enum AtcaIfaceType
 
 /// The supported Device type in Cryptoauthlib library
+#[derive(Display)]
 pub enum AtcaDeviceType {
     ATSHA204A,
     ATECC108A,
@@ -44,7 +47,7 @@ pub enum AtcaDeviceType {
 } // pub enum AtcaDeviceType
 
 /// Return status for ATCA functions
-#[derive(Debug)]
+#[derive(Debug,Display)]
 pub enum AtcaStatus {
     /// Function succeeded.
     AtcaSuccess,

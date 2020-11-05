@@ -23,7 +23,9 @@ pub fn atcab_get_device() -> AtcaDevice {
     return unsafe { cryptoauthlib_sys::atcab_get_device() };
 }
 
-
+pub fn atcab_release() -> AtcaStatus {
+    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() });
+}
 
 #[cfg(test)]
 mod tests {
@@ -55,19 +57,25 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    fn atca_iface_setup() -> Option<super::AtcaIfaceCfg> {
+    fn atca_iface_setup() -> Result<super::AtcaIfaceCfg, String> {
         let config_path = Path::new("config.toml");
         let config_string = read_to_string(config_path).expect("file not found");
         let config: Config = toml::from_str(&config_string).unwrap();
         let interface_type = match config.device.iface_type.as_str() {
             "i2c" => super::AtcaIfaceType::AtcaI2cIface,
-            _ => super::AtcaIfaceType::AtcaUnknownIface,
+            _ => {
+                let e = "Unknown interface type ".to_owned() + config.device.iface_type.as_str();
+                return Err(e);
+            }
         };
         let atca_iface_cfg = super::AtcaIfaceCfg {
             iface_type: interface_type,
-            devtype: match config.device.device_type.as_ref() {
+            devtype: match config.device.device_type.as_str() {
                 "atecc608a" => super::AtcaDeviceType::ATECC608A,
-                _ => super::AtcaDeviceType::AtcaDevUnknown,
+                _ => {
+                    let e = "Unknown device type ".to_owned() + config.device.device_type.as_str();
+                    return Err(e);
+                }
             },
             iface: match interface_type {
                 super::AtcaIfaceType::AtcaI2cIface => super::AtcaIface {
@@ -77,39 +85,31 @@ mod tests {
                         baud: config.interface.baud,
                     },
                 },
-                _ => return None,
+                _ => return Err("Unexpected error - correct the test".to_owned()),
             },
             rx_retries: config.device.rx_retries,
             wake_delay: config.device.wake_delay,
         };
-        return Some(atca_iface_cfg);
+        return Ok(atca_iface_cfg);
     }
     #[test]
     fn atcab_init() {
         let atca_iface_cfg = atca_iface_setup();
         match atca_iface_cfg {
-            Some(x) => {
+            Ok(x) => {
+                assert_eq!(x.iface_type.to_string(),"AtcaI2cIface");
+                assert_eq!(x.devtype.to_string(),"ATECC608A");
                 assert_eq!(x.wake_delay,1500);
                 assert_eq!(x.rx_retries,20);
                 assert_eq!(unsafe{x.iface.atcai2c.slave_address},192);
-                assert_eq!(unsafe{x.iface.atcai2c.bus},2);
+                assert_eq!(unsafe{x.iface.atcai2c.bus},1);
                 assert_eq!(unsafe{x.iface.atcai2c.baud},400000);
-                let atca_status = super::atcab_init(x);
-                match atca_status {
-                    super::AtcaStatus::AtcaSuccess => {
-                        println!("atcab_init() succeeded");
-                        assert_eq!(0,0);
-                    }
-                    _ => {
-                        println!("atcab_init() failed with error");
-                        assert_eq!(1,0);
-                    },
-                }
-            }
-            None => {
-                println!("could not read from config.toml file");
-                assert_eq!(1,0);
+                assert_eq!(super::atcab_init(x).to_string(),"AtcaSuccess");
+            },
+            Err(e) => {
+                panic!("Error reading config.toml file: {}", e);
             },
         };
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
 }

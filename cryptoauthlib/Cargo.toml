@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 cryptoauthlib-sys = { path = "../cryptoauthlib-sys" }
+strum_macros = "0.19.4"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.4.2"
-# strum_macros = "0.19.4"
