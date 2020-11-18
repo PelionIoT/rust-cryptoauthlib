@@ -23,6 +23,9 @@ pub fn atcab_get_device() -> AtcaDevice {
     return unsafe { cryptoauthlib_sys::atcab_get_device() };
 }
 
+pub fn atcab_random(rand_out: *mut u8) -> AtcaStatus {
+    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out) });
+}
 pub fn atcab_release() -> AtcaStatus {
     return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() });
 }
@@ -72,6 +75,7 @@ mod tests {
             iface_type: interface_type,
             devtype: match config.device.device_type.as_str() {
                 "atecc608a" => super::AtcaDeviceType::ATECC608A,
+                "atecc508a"  => super::AtcaDeviceType::ATECC508A,
                 _ => {
                     let e = "Unknown device type ".to_owned() + config.device.device_type.as_str();
                     return Err(e);
@@ -98,7 +102,7 @@ mod tests {
         match atca_iface_cfg {
             Ok(x) => {
                 assert_eq!(x.iface_type.to_string(),"AtcaI2cIface");
-                assert_eq!(x.devtype.to_string(),"ATECC608A");
+                assert_eq!(x.devtype.to_string(),"ATECC508A");
                 assert_eq!(x.wake_delay,1500);
                 assert_eq!(x.rx_retries,20);
                 assert_eq!(unsafe{x.iface.atcai2c.slave_address},192);
@@ -111,5 +115,23 @@ mod tests {
             },
         };
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+    }
+    #[test]
+    fn atcab_sha() {
+        let atca_iface_cfg = atca_iface_setup();
+        let mut digest = Vec::with_capacity(64); 
+        assert_eq!(atca_iface_cfg.is_ok(),true);
+        assert_eq!(super::atcab_init(atca_iface_cfg.unwrap()).to_string(),"AtcaSuccess");
+        assert_eq!(super::atcab_sha(12, "Test message".as_ptr(), digest.as_mut_ptr()).to_string(),"AtcaSuccess");
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+    }
+    #[test]
+    fn atcab_random() {
+        let atca_iface_cfg = atca_iface_setup();
+        let mut rand_out = Vec::with_capacity(32);
+        assert_eq!(atca_iface_cfg.is_ok(),true);
+        assert_eq!(super::atcab_init(atca_iface_cfg.unwrap()).to_string(),"AtcaSuccess"); 
+        assert_eq!(super::atcab_random(rand_out.as_mut_ptr()).to_string(),"AtcaSuccess");
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");     
     }
 }

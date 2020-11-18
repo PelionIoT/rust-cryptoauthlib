@@ -1,5 +1,5 @@
 [device]
-device_type = "atecc608a"
+device_type = "atecc508a"
 # device_type = "bulgulator"
 iface_type = "i2c"
 # iface_type = "zigzag"
