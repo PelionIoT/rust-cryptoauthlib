@@ -30,13 +30,65 @@ pub fn atcab_release() -> AtcaStatus {
     return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() });
 }
 
+pub fn atca_iface_setup(
+    device_type: String,
+    iface_type: String,
+    wake_delay: u16,
+    rx_retries: i32,
+    // I2C parameter
+    slave_address: Option<u8>,
+    // I2C or SWI parameter
+    bus: Option<u8>,
+    // I2C parameter 
+    baud: Option<u32>,
+    // UART parameter
+    _port: Option<i32>,
+    // UART parameter
+    _wordsize: Option<u8>,
+    // UART parameter
+    _parity: Option<u8>,
+    // UART parameter
+    _stopbits: Option<u8>
+    ) -> Result<AtcaIfaceCfg, String> {
+    let interface_type = match iface_type.as_str() {
+        "i2c" => AtcaIfaceType::AtcaI2cIface,
+        _ => {
+            let e = "Unknown interface type ".to_owned() + iface_type.as_str();
+            return Err(e);
+        }
+    };
+    let atca_iface_cfg = AtcaIfaceCfg {
+        iface_type: interface_type,
+        devtype: match device_type.as_str() {
+            "atecc608a" => AtcaDeviceType::ATECC608A,
+            "atecc508a"  => AtcaDeviceType::ATECC508A,
+            _ => {
+                let e = "Unknown device type ".to_owned() + device_type.as_str();
+                return Err(e);
+            }
+        },
+        iface: match interface_type {
+            AtcaIfaceType::AtcaI2cIface => AtcaIface {
+                atcai2c: AtcaIfaceI2c {
+                    slave_address: slave_address.unwrap(),
+                    bus: bus.unwrap(),
+                    baud: baud.unwrap(),
+                },
+            },
+            _ => return Err("Unexpected error - correct the test".to_owned()),
+        },
+        rx_retries: rx_retries,
+        wake_delay: wake_delay,
+    };
+    return Ok(atca_iface_cfg);
+}
+
 #[cfg(test)]
 mod tests {
     use serde::Deserialize;
     use std::path::Path;
     use std::fs::read_to_string;
     use toml;
-    // use strum_macros;
 
     #[derive(Deserialize)]
     struct Config {
@@ -64,37 +116,19 @@ mod tests {
         let config_path = Path::new("config.toml");
         let config_string = read_to_string(config_path).expect("file not found");
         let config: Config = toml::from_str(&config_string).unwrap();
-        let interface_type = match config.device.iface_type.as_str() {
-            "i2c" => super::AtcaIfaceType::AtcaI2cIface,
-            _ => {
-                let e = "Unknown interface type ".to_owned() + config.device.iface_type.as_str();
-                return Err(e);
-            }
-        };
-        let atca_iface_cfg = super::AtcaIfaceCfg {
-            iface_type: interface_type,
-            devtype: match config.device.device_type.as_str() {
-                "atecc608a" => super::AtcaDeviceType::ATECC608A,
-                "atecc508a"  => super::AtcaDeviceType::ATECC508A,
-                _ => {
-                    let e = "Unknown device type ".to_owned() + config.device.device_type.as_str();
-                    return Err(e);
-                }
-            },
-            iface: match interface_type {
-                super::AtcaIfaceType::AtcaI2cIface => super::AtcaIface {
-                    atcai2c: super::AtcaIfaceI2c {
-                        slave_address: config.interface.slave_address,
-                        bus: config.interface.bus,
-                        baud: config.interface.baud,
-                    },
-                },
-                _ => return Err("Unexpected error - correct the test".to_owned()),
-            },
-            rx_retries: config.device.rx_retries,
-            wake_delay: config.device.wake_delay,
-        };
-        return Ok(atca_iface_cfg);
+        return super::atca_iface_setup(
+            config.device.device_type,
+            config.device.iface_type,
+            config.device.wake_delay,
+            config.device.rx_retries,
+            Some(config.interface.slave_address),
+            Some(config.interface.bus),
+            Some(config.interface.baud),
+            None,
+            None,
+            None,
+            None,
+        );
     }
     #[test]
     fn atcab_init() {

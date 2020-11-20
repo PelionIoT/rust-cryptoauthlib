@@ -9,7 +9,6 @@ pub struct AtcaIfaceCfg {
     pub rx_retries: i32,
 } // pub struct AtcaIfaceCfg
 
-
 pub union AtcaIface {
     pub atcai2c: AtcaIfaceI2c,
     // pub atcaswi: AtcaIfaceSwi,
