@@ -1,5 +1,5 @@
 [package]
-name = "cryptoauthlib"
+name = "rust-cryptoauthlib"
 version = "0.1.0"
 authors = ["Robert.Drazkowski@globallogic.com"]
 edition = "2018"
