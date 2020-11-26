@@ -46,7 +46,7 @@ pub enum AtcaDeviceType {
 } // pub enum AtcaDeviceType
 
 /// Return status for ATCA functions
-#[derive(Debug,Display)]
+#[derive(Debug,Display,PartialEq)]
 pub enum AtcaStatus {
     /// Function succeeded.
     AtcaSuccess,
