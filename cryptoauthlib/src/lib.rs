@@ -53,7 +53,7 @@ pub fn atca_iface_setup(
     let interface_type = match iface_type.as_str() {
         "i2c" => AtcaIfaceType::AtcaI2cIface,
         _ => {
-            let e = "Unknown interface type ".to_owned() + iface_type.as_str();
+            let e = "Unsupported interface type ".to_owned() + iface_type.as_str();
             return Err(e);
         }
     };
@@ -63,7 +63,7 @@ pub fn atca_iface_setup(
             "atecc608a" => AtcaDeviceType::ATECC608A,
             "atecc508a"  => AtcaDeviceType::ATECC508A,
             _ => {
-                let e = "Unknown device type ".to_owned() + device_type.as_str();
+                let e = "Unsupported device type ".to_owned() + device_type.as_str();
                 return Err(e);
             }
         },
@@ -75,7 +75,10 @@ pub fn atca_iface_setup(
                     baud: baud.unwrap(),
                 },
             },
-            _ => return Err("Unexpected error - correct the test".to_owned()),
+            _ =>  {
+                let e = "Unexpected interface type ".to_owned() + iface_type.as_str();
+                return Err(e);
+            }
         },
         rx_retries: rx_retries,
         wake_delay: wake_delay,
