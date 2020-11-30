@@ -20,7 +20,11 @@ pub fn atcab_sha(length: u16, message: *const u8, digest: *mut u8) -> AtcaStatus
 
 /// Get the global device object
 pub fn atcab_get_device() -> AtcaDevice {
-    return unsafe { cryptoauthlib_sys::atcab_get_device() };
+    return AtcaDevice {
+            dev: unsafe {
+                cryptoauthlib_sys::atcab_get_device()
+            }
+        };
 }
 
 pub fn atcab_random(rand_out: *mut u8) -> AtcaStatus {

@@ -124,20 +124,13 @@ pub enum AtcaStatus {
     AtcaUnknown,
 } // pub enum AtcaStatus
 
-// pub type AtcaDevicePtr = *mut AtcaDevice;
-// pub struct AtcaDevice {
-//     #[doc = "!< Command set for a given CryptoAuth device"]
-//     pub commands: AtcaCommandPtr,
-//     #[doc = "!< Physical interface"]
-//     pub iface: AtcaIface,
-// }
+/// The Rust box for C object backing ATCADevice
+#[derive(Debug,Clone)]
+// supress "warning: field is never read: `dev`"
+#[allow(dead_code)]
+pub struct AtcaDevice {
+    dev: cryptoauthlib_sys::ATCADevice,
+}
 
-// pub type AtcaCommandPtr = *mut AtcaCommand;
-// pub struct AtcaCommand {
-//     pub dt: AtcaDeviceType,
-//     pub clock_divider: u8,
-//     pub execution_time_msec: u16,
-// }
-
-/// The C object backing ATCADevice
-pub type AtcaDevice = cryptoauthlib_sys::ATCADevice;
+unsafe impl Send for AtcaDevice {}
+unsafe impl Sync for AtcaDevice {}
