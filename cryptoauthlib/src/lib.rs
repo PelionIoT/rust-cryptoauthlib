@@ -1,4 +1,3 @@
-use cryptoauthlib_sys;
 mod c2rust;
 mod rust2c;
 
@@ -94,8 +93,8 @@ pub fn atca_iface_setup(
                 return Err(e);
             }
         },
-        rx_retries: rx_retries,
-        wake_delay: wake_delay,
+        rx_retries,
+        wake_delay,
     };
     return Ok(atca_iface_cfg);
 }

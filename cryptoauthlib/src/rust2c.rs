@@ -1,5 +1,3 @@
-use cryptoauthlib_sys;
-
 pub fn r2c_atca_iface_cfg(
     rust_iface_cfg: super::AtcaIfaceCfg,
 ) -> Option<cryptoauthlib_sys::ATCAIfaceCfg> {
