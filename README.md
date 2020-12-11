@@ -10,7 +10,7 @@ The Rust wrapper for the [Microchip CryptoAuthentication Library](https://github
 The wrapper carries own cryptoauthentication library (3.1.0) as a git submodule, hence its cloning requires caution.<br>
 For the snippets below, double check the GITREPO URI; this one works for now:
 ~~~
-GITREPO = git@portal-ua.globallogic.com:arm-pelion-egde/rust-cryptoauthlib.git
+GITREPO = https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib.git
 ~~~
 ### Cloning the whole repository in one step
 ~~~
