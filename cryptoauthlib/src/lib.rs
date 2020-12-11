@@ -74,9 +74,19 @@ pub fn atca_iface_setup(
         iface: match interface_type {
             AtcaIfaceType::AtcaI2cIface => AtcaIface {
                 atcai2c: AtcaIfaceI2c {
-                    slave_address: slave_address.unwrap(),
-                    bus: bus.unwrap(),
-                    baud: baud.unwrap(),
+                    // unwrap_or_else_return()? 
+                    slave_address: match slave_address {
+                        Some(x) => x,
+                        _ => return Err("missing i2c slave address".to_owned())
+                    },
+                    bus: match bus {
+                        Some(x) => x,
+                        _ => return Err("missing i2c bus".to_owned())
+                    },
+                    baud: match baud {
+                        Some(x) => x,
+                        _ => return Err("missing i2c baud rate".to_owned())
+                    }
                 },
             },
             _ =>  {
