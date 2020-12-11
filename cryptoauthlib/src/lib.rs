@@ -10,21 +10,21 @@ pub fn atcab_init(r_iface_cfg: AtcaIfaceCfg) -> AtcaStatus {
         Some(x) => x,
         None => return AtcaStatus::AtcaUnimplemented,
     };
-	return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init( &mut c_iface_cfg) });
+    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(&mut c_iface_cfg) });
 }
 
 /// Use the SHA command to compute a SHA-256 digest.
 pub fn atcab_sha(length: u16, message: *const u8, digest: *mut u8) -> AtcaStatus {
-    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_sha(length, message, digest) });
+    return c2rust::c2r_enum_status(unsafe {
+        cryptoauthlib_sys::atcab_sha(length, message, digest)
+    });
 }
 
 /// Get the global device object
 pub fn atcab_get_device() -> AtcaDevice {
     return AtcaDevice {
-            dev: unsafe {
-                cryptoauthlib_sys::atcab_get_device()
-            }
-        };
+        dev: unsafe { cryptoauthlib_sys::atcab_get_device() },
+    };
 }
 
 pub fn atcab_random(rand_out: *mut u8) -> AtcaStatus {
@@ -43,7 +43,7 @@ pub fn atca_iface_setup(
     slave_address: Option<u8>,
     // I2C or SWI parameter
     bus: Option<u8>,
-    // I2C parameter 
+    // I2C parameter
     baud: Option<u32>,
     // UART parameter
     _port: Option<i32>,
@@ -52,8 +52,8 @@ pub fn atca_iface_setup(
     // UART parameter
     _parity: Option<u8>,
     // UART parameter
-    _stopbits: Option<u8>
-    ) -> Result<AtcaIfaceCfg, String> {
+    _stopbits: Option<u8>,
+) -> Result<AtcaIfaceCfg, String> {
     let interface_type = match iface_type.as_str() {
         "i2c" => AtcaIfaceType::AtcaI2cIface,
         _ => {
@@ -65,7 +65,7 @@ pub fn atca_iface_setup(
         iface_type: interface_type,
         devtype: match device_type.as_str() {
             "atecc608a" => AtcaDeviceType::ATECC608A,
-            "atecc508a"  => AtcaDeviceType::ATECC508A,
+            "atecc508a" => AtcaDeviceType::ATECC508A,
             _ => {
                 let e = "Unsupported device type ".to_owned() + device_type.as_str();
                 return Err(e);
@@ -74,22 +74,22 @@ pub fn atca_iface_setup(
         iface: match interface_type {
             AtcaIfaceType::AtcaI2cIface => AtcaIface {
                 atcai2c: AtcaIfaceI2c {
-                    // unwrap_or_else_return()? 
+                    // unwrap_or_else_return()?
                     slave_address: match slave_address {
                         Some(x) => x,
-                        _ => return Err("missing i2c slave address".to_owned())
+                        _ => return Err("missing i2c slave address".to_owned()),
                     },
                     bus: match bus {
                         Some(x) => x,
-                        _ => return Err("missing i2c bus".to_owned())
+                        _ => return Err("missing i2c bus".to_owned()),
                     },
                     baud: match baud {
                         Some(x) => x,
-                        _ => return Err("missing i2c baud rate".to_owned())
-                    }
+                        _ => return Err("missing i2c baud rate".to_owned()),
+                    },
                 },
             },
-            _ =>  {
+            _ => {
                 let e = "Unexpected interface type ".to_owned() + iface_type.as_str();
                 return Err(e);
             }
@@ -103,8 +103,8 @@ pub fn atca_iface_setup(
 #[cfg(test)]
 mod tests {
     use serde::Deserialize;
-    use std::path::Path;
     use std::fs::read_to_string;
+    use std::path::Path;
     use toml;
 
     #[derive(Deserialize)]
@@ -112,7 +112,7 @@ mod tests {
         pub device: Device,
         pub interface: Interface,
     }
-    
+
     #[derive(Deserialize)]
     struct Device {
         pub device_type: String,
@@ -124,7 +124,7 @@ mod tests {
     #[derive(Deserialize)]
     struct Interface {
         pub slave_address: u8,
-        pub bus: u8, 
+        pub bus: u8,
         pub baud: u32,
     }
 
@@ -152,37 +152,49 @@ mod tests {
         let atca_iface_cfg = atca_iface_setup();
         match atca_iface_cfg {
             Ok(x) => {
-                assert_eq!(x.iface_type.to_string(),"AtcaI2cIface");
-                assert_eq!(x.devtype.to_string(),"ATECC508A");
-                assert_eq!(x.wake_delay,1500);
-                assert_eq!(x.rx_retries,20);
-                assert_eq!(unsafe{x.iface.atcai2c.slave_address},192);
-                assert_eq!(unsafe{x.iface.atcai2c.bus},1);
-                assert_eq!(unsafe{x.iface.atcai2c.baud},400000);
-                assert_eq!(super::atcab_init(x).to_string(),"AtcaSuccess");
-            },
+                assert_eq!(x.iface_type.to_string(), "AtcaI2cIface");
+                assert_eq!(x.devtype.to_string(), "ATECC508A");
+                assert_eq!(x.wake_delay, 1500);
+                assert_eq!(x.rx_retries, 20);
+                assert_eq!(unsafe { x.iface.atcai2c.slave_address }, 192);
+                assert_eq!(unsafe { x.iface.atcai2c.bus }, 1);
+                assert_eq!(unsafe { x.iface.atcai2c.baud }, 400000);
+                assert_eq!(super::atcab_init(x).to_string(), "AtcaSuccess");
+            }
             Err(e) => {
                 panic!("Error reading config.toml file: {}", e);
-            },
+            }
         };
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
     #[test]
     fn atcab_sha() {
         let atca_iface_cfg = atca_iface_setup();
-        let mut digest = Vec::with_capacity(64); 
-        assert_eq!(atca_iface_cfg.is_ok(),true);
-        assert_eq!(super::atcab_init(atca_iface_cfg.unwrap()).to_string(),"AtcaSuccess");
-        assert_eq!(super::atcab_sha(12, "Test message".as_ptr(), digest.as_mut_ptr()).to_string(),"AtcaSuccess");
+        let mut digest = Vec::with_capacity(64);
+        assert_eq!(atca_iface_cfg.is_ok(), true);
+        assert_eq!(
+            super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(
+            super::atcab_sha(12, "Test message".as_ptr(), digest.as_mut_ptr()).to_string(),
+            "AtcaSuccess"
+        );
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
     #[test]
     fn atcab_random() {
         let atca_iface_cfg = atca_iface_setup();
         let mut rand_out = Vec::with_capacity(32);
-        assert_eq!(atca_iface_cfg.is_ok(),true);
-        assert_eq!(super::atcab_init(atca_iface_cfg.unwrap()).to_string(),"AtcaSuccess"); 
-        assert_eq!(super::atcab_random(rand_out.as_mut_ptr()).to_string(),"AtcaSuccess");
-        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");     
+        assert_eq!(atca_iface_cfg.is_ok(), true);
+        assert_eq!(
+            super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(
+            super::atcab_random(rand_out.as_mut_ptr()).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
 }
