@@ -14,9 +14,7 @@ pub fn atcab_init(r_iface_cfg: AtcaIfaceCfg) -> AtcaStatus {
 
 /// Use the SHA command to compute a SHA-256 digest.
 pub fn atcab_sha(length: u16, message: *const u8, digest: *mut u8) -> AtcaStatus {
-    c2rust::c2r_enum_status(unsafe {
-        cryptoauthlib_sys::atcab_sha(length, message, digest)
-    })
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_sha(length, message, digest) })
 }
 
 /// Get the global device object
