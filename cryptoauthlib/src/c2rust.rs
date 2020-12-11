@@ -1,7 +1,5 @@
-use cryptoauthlib_sys;
-
 pub fn c2r_enum_status(atca_status: cryptoauthlib_sys::ATCA_STATUS) -> super::AtcaStatus {
-    return match atca_status {
+    match atca_status {
         cryptoauthlib_sys::ATCA_STATUS_ATCA_SUCCESS => super::AtcaStatus::AtcaSuccess,
         cryptoauthlib_sys::ATCA_STATUS_ATCA_CONFIG_ZONE_LOCKED => {
             super::AtcaStatus::AtcaConfigZoneLocked
@@ -58,5 +56,5 @@ pub fn c2r_enum_status(atca_status: cryptoauthlib_sys::ATCA_STATUS) -> super::At
             super::AtcaStatus::AtcaUseFlagsConsumed
         }
         _ => super::AtcaStatus::AtcaUnknown,
-    };
+    }
 }

@@ -3,6 +3,12 @@ name = "cryptoauthlib-sys"
 version = "0.1.0"
 authors = ["Robert.Drazkowski@globallogic.com"]
 edition = "2018"
+description = "Automatically generated Rust bindings for CryptoAuthentication Library calls."
+repository = "https://github.com/rdrazkowski/rust-cryptoauthlib/cryptoauthlib-sys"
+readme = "README.md"
+keywords = ["cryptoauthlib"]
+categories = ["cryptography", "hardware-support", "ffi-bindings"]
+license = "Apache-2.0"
 build= "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

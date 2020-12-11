@@ -1,5 +1,3 @@
-use cmake;
-
 fn main() {
     let dst = cmake::Config::new("cryptoauthlib")
         .no_build_target(true) // Prevent installing in host system directories

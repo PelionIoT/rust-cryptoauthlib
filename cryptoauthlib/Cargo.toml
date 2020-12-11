@@ -3,6 +3,12 @@ name = "rust-cryptoauthlib"
 version = "0.1.0"
 authors = ["Robert.Drazkowski@globallogic.com"]
 edition = "2018"
+description = "Safe Rust wrappers for CryptoAuthentication Library bindings."
+repository = "https://github.com/rdrazkowski/rust-cryptoauthlib/cryptoauthlib"
+readme = "README.md"
+keywords = ["cryptoauthlib"]
+categories = ["cryptography", "hardware-support"]
+license = "Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

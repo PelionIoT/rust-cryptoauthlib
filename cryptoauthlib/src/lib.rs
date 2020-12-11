@@ -1,4 +1,3 @@
-use cryptoauthlib_sys;
 mod c2rust;
 mod rust2c;
 
@@ -10,28 +9,28 @@ pub fn atcab_init(r_iface_cfg: AtcaIfaceCfg) -> AtcaStatus {
         Some(x) => x,
         None => return AtcaStatus::AtcaUnimplemented,
     };
-    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(&mut c_iface_cfg) });
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(&mut c_iface_cfg) })
 }
 
 /// Use the SHA command to compute a SHA-256 digest.
 pub fn atcab_sha(length: u16, message: *const u8, digest: *mut u8) -> AtcaStatus {
-    return c2rust::c2r_enum_status(unsafe {
+    c2rust::c2r_enum_status(unsafe {
         cryptoauthlib_sys::atcab_sha(length, message, digest)
-    });
+    })
 }
 
 /// Get the global device object
 pub fn atcab_get_device() -> AtcaDevice {
-    return AtcaDevice {
+    AtcaDevice {
         dev: unsafe { cryptoauthlib_sys::atcab_get_device() },
-    };
+    }
 }
 
 pub fn atcab_random(rand_out: *mut u8) -> AtcaStatus {
-    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out) });
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out) })
 }
 pub fn atcab_release() -> AtcaStatus {
-    return c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() });
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() })
 }
 
 pub fn atca_iface_setup(
@@ -94,10 +93,10 @@ pub fn atca_iface_setup(
                 return Err(e);
             }
         },
-        rx_retries: rx_retries,
-        wake_delay: wake_delay,
+        rx_retries,
+        wake_delay,
     };
-    return Ok(atca_iface_cfg);
+    Ok(atca_iface_cfg)
 }
 
 #[cfg(test)]

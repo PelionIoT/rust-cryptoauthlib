@@ -1,14 +1,2 @@
 [workspace]
 members = ["cryptoauthlib-sys", "cryptoauthlib"]
-
-[profile.dev]
-rpath = true
-
-[profile.release]
-rpath = true
-
-[profile.test]
-rpath = true
-
-[profile.bench]
-rpath = true
