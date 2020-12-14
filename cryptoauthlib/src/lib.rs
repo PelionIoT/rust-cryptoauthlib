@@ -31,6 +31,7 @@ pub fn atcab_release() -> AtcaStatus {
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() })
 }
 
+// Left for compatibility reasons - will be removed soon!
 pub fn atca_iface_setup(
     device_type: String,
     iface_type: String,
@@ -97,6 +98,50 @@ pub fn atca_iface_setup(
     Ok(atca_iface_cfg)
 }
 
+pub fn atca_iface_setup_i2c(
+    device_type: String,
+    wake_delay: u16,
+    rx_retries: i32,
+    // I2C salve address
+    slave_address: Option<u8>,
+    // I2C bus number
+    bus: Option<u8>,
+    // I2C baud rate
+    baud: Option<u32>,
+) -> Result<AtcaIfaceCfg, String> {
+    let atca_iface_cfg = AtcaIfaceCfg {
+        iface_type: AtcaIfaceType::AtcaI2cIface,
+        devtype: match device_type.as_str() {
+            "atecc608a" => AtcaDeviceType::ATECC608A,
+            "atecc508a" => AtcaDeviceType::ATECC508A,
+            _ => {
+                let e = "Unsupported device type ".to_owned() + device_type.as_str();
+                return Err(e);
+            }
+        },
+        iface: AtcaIface {
+            atcai2c: AtcaIfaceI2c {
+                // unwrap_or_else_return()?
+                slave_address: match slave_address {
+                    Some(x) => x,
+                    _ => return Err("missing i2c slave address".to_owned()),
+                },
+                bus: match bus {
+                    Some(x) => x,
+                    _ => return Err("missing i2c bus".to_owned()),
+                },
+                baud: match baud {
+                    Some(x) => x,
+                    _ => return Err("missing i2c baud rate".to_owned()),
+                },
+            },
+        },
+        rx_retries,
+        wake_delay,
+    };
+    Ok(atca_iface_cfg)
+}
+
 #[cfg(test)]
 mod tests {
     use serde::Deserialize;
@@ -130,19 +175,17 @@ mod tests {
         let config_path = Path::new("config.toml");
         let config_string = read_to_string(config_path).expect("file not found");
         let config: Config = toml::from_str(&config_string).unwrap();
-        return super::atca_iface_setup(
-            config.device.device_type,
-            config.device.iface_type,
-            config.device.wake_delay,
-            config.device.rx_retries,
-            Some(config.interface.slave_address),
-            Some(config.interface.bus),
-            Some(config.interface.baud),
-            None,
-            None,
-            None,
-            None,
-        );
+        match config.device.iface_type.as_str() {
+            "i2c" => super::atca_iface_setup_i2c(
+                config.device.device_type,
+                config.device.wake_delay,
+                config.device.rx_retries,
+                Some(config.interface.slave_address),
+                Some(config.interface.bus),
+                Some(config.interface.baud),
+            ),
+            _ => Err("unsupported interface type".to_owned()),
+        }
     }
     #[test]
     fn atcab_init() {
