@@ -1,5 +1,6 @@
 mod c2rust;
 mod rust2c;
+use std::convert::TryFrom;
 
 include!("./types.rs");
 
@@ -9,12 +10,27 @@ pub fn atcab_init(r_iface_cfg: AtcaIfaceCfg) -> AtcaStatus {
         Some(x) => x,
         None => return AtcaStatus::AtcaUnimplemented,
     };
+
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(&mut c_iface_cfg) })
 }
 
 /// Use the SHA command to compute a SHA-256 digest.
-pub fn atcab_sha(length: u16, message: *const u8, digest: *mut u8) -> AtcaStatus {
-    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_sha(length, message, digest) })
+pub fn atcab_sha(message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
+
+    let length: u16 = match u16::try_from(message.len()) {
+        Ok(val) => val,
+        Err(_) => return AtcaStatus::AtcaBadParam
+    };
+
+    if digest.len() != 64 {
+        digest.resize(64, 0);
+    }
+
+    c2rust::c2r_enum_status(unsafe {
+        cryptoauthlib_sys::atcab_sha(length,
+                                     message.as_ptr(),
+                                     digest.as_mut_ptr())
+    })
 }
 
 /// Get the global device object
@@ -24,9 +40,16 @@ pub fn atcab_get_device() -> AtcaDevice {
     }
 }
 
-pub fn atcab_random(rand_out: *mut u8) -> AtcaStatus {
-    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out) })
+pub fn atcab_random(rand_out: &mut Vec<u8>) -> AtcaStatus {
+    if rand_out.len() != 32 {
+        rand_out.resize(32, 0);
+    }
+
+    c2rust::c2r_enum_status(unsafe {
+        cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr())
+    })
 }
+
 pub fn atcab_release() -> AtcaStatus {
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() })
 }
@@ -210,14 +233,18 @@ mod tests {
     #[test]
     fn atcab_sha() {
         let atca_iface_cfg = atca_iface_setup();
-        let mut digest = Vec::with_capacity(64);
+        let mut digest: Vec<u8> = Vec::with_capacity(64);
         assert_eq!(atca_iface_cfg.is_ok(), true);
         assert_eq!(
             super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
             "AtcaSuccess"
         );
+
+        let test_message = "TestMessage";
+        let message = test_message.as_bytes().to_vec();
+
         assert_eq!(
-            super::atcab_sha(12, "Test message".as_ptr(), digest.as_mut_ptr()).to_string(),
+            super::atcab_sha(message, &mut digest).to_string(),
             "AtcaSuccess"
         );
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
@@ -232,7 +259,7 @@ mod tests {
             "AtcaSuccess"
         );
         assert_eq!(
-            super::atcab_random(rand_out.as_mut_ptr()).to_string(),
+            super::atcab_random(&mut rand_out).to_string(),
             "AtcaSuccess"
         );
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
