@@ -1,0 +1,12 @@
+[device]
+device_type = "atecc508a"
+iface_type = "i2c"
+wake_delay = 1500
+rx_retries = 20
+
+[interface]
+slave_address = 0xc0
+# bus = 2
+# bus 1 should work with i2c-pseudo
+bus = 1
+baud = 400000
