@@ -143,12 +143,6 @@ mod tests {
         match atca_iface_cfg {
             Ok(x) => {
                 assert_eq!(x.iface_type.to_string(), "AtcaI2cIface");
-                assert_eq!(x.devtype.to_string(), "ATECC508A");
-                assert_eq!(x.wake_delay, 1500);
-                assert_eq!(x.rx_retries, 20);
-                assert_eq!(unsafe { x.iface.atcai2c.slave_address }, 192);
-                assert_eq!(unsafe { x.iface.atcai2c.bus }, 1);
-                assert_eq!(unsafe { x.iface.atcai2c.baud }, 400000);
                 assert_eq!(super::atcab_init(x).to_string(), "AtcaSuccess");
             }
             Err(e) => {
