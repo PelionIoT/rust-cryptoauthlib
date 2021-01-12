@@ -22,8 +22,10 @@ pub fn atcab_sha(message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
         Err(_) => return AtcaStatus::AtcaBadParam
     };
 
-    if digest.len() != 32 {
-        digest.resize(32, 0);
+    let digest_size: usize = cryptoauthlib_sys::ATCA_SHA2_256_DIGEST_SIZE as usize;
+
+    if digest.len() != digest_size {
+        digest.resize(digest_size, 0);
     }
 
     c2rust::c2r_enum_status(unsafe {
