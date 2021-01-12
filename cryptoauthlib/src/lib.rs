@@ -22,8 +22,8 @@ pub fn atcab_sha(message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
         Err(_) => return AtcaStatus::AtcaBadParam
     };
 
-    if digest.len() != 64 {
-        digest.resize(64, 0);
+    if digest.len() != 32 {
+        digest.resize(32, 0);
     }
 
     c2rust::c2r_enum_status(unsafe {
