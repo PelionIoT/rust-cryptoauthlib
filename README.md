@@ -5,7 +5,6 @@ The Rust wrapper for the [Microchip CryptoAuthentication Library](https://github
 
 ***
 
-[[_TOC_]]
 ## Repository cloning
 The wrapper carries own cryptoauthentication library (3.1.0) as a git submodule, hence its cloning requires caution.<br>
 For the snippets below, double check the GITREPO URI; this one works for now:
@@ -22,6 +21,8 @@ git clone $GITREPO
 cd rust-cryptoauthlib
 git submodule update --init --recursive
 ~~~
+The above fixes also below compilation error:
+`CMake Error: The source directory "/home/robert/github/rust-cryptoauthlib/cryptoauthlib-sys/cryptoauthlib" does not appear to contain CMakeLists.txt.`
 ## Compilation instructions.
 A release build<br>
 ~~~

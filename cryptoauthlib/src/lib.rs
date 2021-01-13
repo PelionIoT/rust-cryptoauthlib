@@ -21,8 +21,10 @@ pub fn atcab_sha(message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
         Err(_) => return AtcaStatus::AtcaBadParam,
     };
 
-    if digest.len() != 32 {
-        digest.resize(32, 0);
+    let digest_size: usize = cryptoauthlib_sys::ATCA_SHA2_256_DIGEST_SIZE as usize;
+
+    if digest.len() != digest_size {
+        digest.resize(digest_size, 0);
     }
 
     c2rust::c2r_enum_status(unsafe {
@@ -38,8 +40,8 @@ pub fn atcab_get_device() -> AtcaDevice {
 }
 
 pub fn atcab_random(rand_out: &mut Vec<u8>) -> AtcaStatus {
-    if rand_out.len() != 32 {
-        rand_out.resize(32, 0);
+    if rand_out.len() != ACTA_RANDOM_BUFFER_SIZE {
+        rand_out.resize(ACTA_RANDOM_BUFFER_SIZE, 0);
     }
 
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr()) })
