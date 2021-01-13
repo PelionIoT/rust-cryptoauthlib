@@ -21,8 +21,8 @@ git clone $GITREPO
 cd rust-cryptoauthlib
 git submodule update --init --recursive
 ~~~
-The above fixes also below compilation error:
-`CMake Error: The source directory "/home/robert/github/rust-cryptoauthlib/cryptoauthlib-sys/cryptoauthlib" does not appear to contain CMakeLists.txt.`
+The above fixes also below compilation error:<br>
+`CMake Error: The source directory "/home/user/rust-cryptoauthlib/cryptoauthlib-sys/cryptoauthlib" does not appear to contain CMakeLists.txt.`
 ## Compilation instructions.
 A release build<br>
 ~~~
