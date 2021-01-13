@@ -16,10 +16,9 @@ pub fn atcab_init(r_iface_cfg: AtcaIfaceCfg) -> AtcaStatus {
 
 /// Use the SHA command to compute a SHA-256 digest.
 pub fn atcab_sha(message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
-
     let length: u16 = match u16::try_from(message.len()) {
         Ok(val) => val,
-        Err(_) => return AtcaStatus::AtcaBadParam
+        Err(_) => return AtcaStatus::AtcaBadParam,
     };
 
     let digest_size: usize = cryptoauthlib_sys::ATCA_SHA2_256_DIGEST_SIZE as usize;
@@ -29,9 +28,7 @@ pub fn atcab_sha(message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
     }
 
     c2rust::c2r_enum_status(unsafe {
-        cryptoauthlib_sys::atcab_sha(length,
-                                     message.as_ptr(),
-                                     digest.as_mut_ptr())
+        cryptoauthlib_sys::atcab_sha(length, message.as_ptr(), digest.as_mut_ptr())
     })
 }
 
@@ -43,84 +40,15 @@ pub fn atcab_get_device() -> AtcaDevice {
 }
 
 pub fn atcab_random(rand_out: &mut Vec<u8>) -> AtcaStatus {
-    if rand_out.len() != 32 {
-        rand_out.resize(32, 0);
+    if rand_out.len() != ACTA_RANDOM_BUFFER_SIZE {
+        rand_out.resize(ACTA_RANDOM_BUFFER_SIZE, 0);
     }
 
-    c2rust::c2r_enum_status(unsafe {
-        cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr())
-    })
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr()) })
 }
 
 pub fn atcab_release() -> AtcaStatus {
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() })
-}
-
-// Left for compatibility reasons - will be removed soon!
-pub fn atca_iface_setup(
-    device_type: String,
-    iface_type: String,
-    wake_delay: u16,
-    rx_retries: i32,
-    // I2C parameter
-    slave_address: Option<u8>,
-    // I2C or SWI parameter
-    bus: Option<u8>,
-    // I2C parameter
-    baud: Option<u32>,
-    // UART parameter
-    _port: Option<i32>,
-    // UART parameter
-    _wordsize: Option<u8>,
-    // UART parameter
-    _parity: Option<u8>,
-    // UART parameter
-    _stopbits: Option<u8>,
-) -> Result<AtcaIfaceCfg, String> {
-    let interface_type = match iface_type.as_str() {
-        "i2c" => AtcaIfaceType::AtcaI2cIface,
-        _ => {
-            let e = "Unsupported interface type ".to_owned() + iface_type.as_str();
-            return Err(e);
-        }
-    };
-    let atca_iface_cfg = AtcaIfaceCfg {
-        iface_type: interface_type,
-        devtype: match device_type.as_str() {
-            "atecc608a" => AtcaDeviceType::ATECC608A,
-            "atecc508a" => AtcaDeviceType::ATECC508A,
-            _ => {
-                let e = "Unsupported device type ".to_owned() + device_type.as_str();
-                return Err(e);
-            }
-        },
-        iface: match interface_type {
-            AtcaIfaceType::AtcaI2cIface => AtcaIface {
-                atcai2c: AtcaIfaceI2c {
-                    // unwrap_or_else_return()?
-                    slave_address: match slave_address {
-                        Some(x) => x,
-                        _ => return Err("missing i2c slave address".to_owned()),
-                    },
-                    bus: match bus {
-                        Some(x) => x,
-                        _ => return Err("missing i2c bus".to_owned()),
-                    },
-                    baud: match baud {
-                        Some(x) => x,
-                        _ => return Err("missing i2c baud rate".to_owned()),
-                    },
-                },
-            },
-            _ => {
-                let e = "Unexpected interface type ".to_owned() + iface_type.as_str();
-                return Err(e);
-            }
-        },
-        rx_retries,
-        wake_delay,
-    };
-    Ok(atca_iface_cfg)
 }
 
 pub fn atca_iface_setup_i2c(
@@ -172,7 +100,6 @@ mod tests {
     use serde::Deserialize;
     use std::fs::read_to_string;
     use std::path::Path;
-    use toml;
 
     #[derive(Deserialize)]
     struct Config {
@@ -218,12 +145,6 @@ mod tests {
         match atca_iface_cfg {
             Ok(x) => {
                 assert_eq!(x.iface_type.to_string(), "AtcaI2cIface");
-                assert_eq!(x.devtype.to_string(), "ATECC508A");
-                assert_eq!(x.wake_delay, 1500);
-                assert_eq!(x.rx_retries, 20);
-                assert_eq!(unsafe { x.iface.atcai2c.slave_address }, 192);
-                assert_eq!(unsafe { x.iface.atcai2c.bus }, 1);
-                assert_eq!(unsafe { x.iface.atcai2c.baud }, 400000);
                 assert_eq!(super::atcab_init(x).to_string(), "AtcaSuccess");
             }
             Err(e) => {
