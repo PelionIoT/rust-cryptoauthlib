@@ -100,6 +100,7 @@ mod tests {
     use serde::Deserialize;
     use std::fs::read_to_string;
     use std::path::Path;
+    use serial_test::serial;
 
     #[derive(Deserialize)]
     struct Config {
@@ -140,6 +141,7 @@ mod tests {
         }
     }
     #[test]
+    #[serial]
     fn atcab_init() {
         let atca_iface_cfg = atca_iface_setup();
         match atca_iface_cfg {
@@ -154,6 +156,7 @@ mod tests {
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
     #[test]
+    #[serial]
     fn atcab_sha() {
         let atca_iface_cfg = atca_iface_setup();
         let mut digest: Vec<u8> = Vec::with_capacity(64);
@@ -173,6 +176,7 @@ mod tests {
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
     #[test]
+    #[serial]
     fn atcab_random() {
         let atca_iface_cfg = atca_iface_setup();
         let mut rand_out = Vec::with_capacity(32);
