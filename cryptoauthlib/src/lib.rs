@@ -4,14 +4,27 @@ use std::convert::TryFrom;
 
 include!("./types.rs");
 
+// Unfortunately cryptoauthlib takes ATCAIfaceCfg pointer as a field inside
+// _gDevice->mIface->mIfaceCFG, so it _must_ be taken from heap.bool
+// It adds several lines of code to implement it...
+static mut GLOBAL_IFACE_CFG_PTR: *mut cryptoauthlib_sys::ATCAIfaceCfg =
+    0 as *mut cryptoauthlib_sys::ATCAIfaceCfg;
+
 /// Creates a global ATCADevice object used by Basic API.
 pub fn atcab_init(r_iface_cfg: AtcaIfaceCfg) -> AtcaStatus {
-    let mut c_iface_cfg = match rust2c::r2c_atca_iface_cfg(r_iface_cfg) {
-        Some(x) => x,
-        None => return AtcaStatus::AtcaUnimplemented,
-    };
+    let mut iface_cfg_ptr;
+    let allow_allocation: bool =
+        unsafe { GLOBAL_IFACE_CFG_PTR == std::ptr::null_mut::<cryptoauthlib_sys::ATCAIfaceCfg>() };
+    if allow_allocation {
+        iface_cfg_ptr = Box::new(match rust2c::r2c_atca_iface_cfg(r_iface_cfg) {
+            Some(x) => x,
+            None => return AtcaStatus::AtcaBadParam,
+        });
+        unsafe { GLOBAL_IFACE_CFG_PTR = &mut *iface_cfg_ptr };
+        std::mem::forget(iface_cfg_ptr);
+    }
 
-    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(&mut c_iface_cfg) })
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(GLOBAL_IFACE_CFG_PTR) })
 }
 
 /// Use the SHA command to compute a SHA-256 digest.
@@ -98,6 +111,7 @@ pub fn atca_iface_setup_i2c(
 #[cfg(test)]
 mod tests {
     use serde::Deserialize;
+    use serial_test::serial;
     use std::fs::read_to_string;
     use std::path::Path;
 
@@ -140,6 +154,7 @@ mod tests {
         }
     }
     #[test]
+    #[serial]
     fn atcab_init() {
         let atca_iface_cfg = atca_iface_setup();
         match atca_iface_cfg {
@@ -154,6 +169,7 @@ mod tests {
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
     #[test]
+    #[serial]
     fn atcab_sha() {
         let atca_iface_cfg = atca_iface_setup();
         let mut digest: Vec<u8> = Vec::with_capacity(64);
@@ -173,6 +189,7 @@ mod tests {
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
     #[test]
+    #[serial]
     fn atcab_random() {
         let atca_iface_cfg = atca_iface_setup();
         let mut rand_out = Vec::with_capacity(32);
