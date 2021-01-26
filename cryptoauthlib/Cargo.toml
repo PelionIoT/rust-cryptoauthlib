@@ -3,7 +3,7 @@ name = "rust-cryptoauthlib"
 version = "0.1.0"
 authors = ["Robert.Drazkowski@globallogic.com"]
 edition = "2018"
-description = "Safe Rust wrappers for CryptoAuthentication Library bindings."
+description = "Rust wrappers for CryptoAuthentication Library bindings."
 repository = "https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib/"
 readme = "README.md"
 keywords = ["cryptoauthlib", "crypto", "cryptography"]
@@ -13,10 +13,10 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cryptoauthlib-sys = { path = "../cryptoauthlib-sys" }
+cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.1.0" }
 strum_macros = "0.19.4"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.4.2"
-serial_test = "*"
+serial_test = "0.5.1"
