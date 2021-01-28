@@ -52,12 +52,54 @@ pub fn atcab_get_device() -> AtcaDevice {
     }
 }
 
+pub fn atcab_get_device_type() -> AtcaDeviceType {
+    c2rust::c2r_enum_devtype(unsafe { cryptoauthlib_sys::atcab_get_device_type() })
+}
+
 pub fn atcab_random(rand_out: &mut Vec<u8>) -> AtcaStatus {
     if rand_out.len() != ACTA_RANDOM_BUFFER_SIZE {
         rand_out.resize(ACTA_RANDOM_BUFFER_SIZE, 0);
     }
 
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr()) })
+}
+
+fn atcab_is_locked(zone: u8, is_locked: *mut bool) -> AtcaStatus {
+    c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_is_locked(zone, is_locked) })
+}
+
+pub fn atcab_configuration_is_locked(is_locked: &mut bool) -> AtcaStatus {
+    atcab_is_locked(ATCA_ZONE_CONFIG, is_locked)
+}
+
+fn atcab_get_config_buffer_size() -> usize {
+    let device_type = atcab_get_device_type();
+    match device_type {
+        AtcaDeviceType::ATECC508A | AtcaDeviceType::ATECC608A | AtcaDeviceType::ATECC108A => {
+            ATCA_ATECC_CONFIG_BUFFER_SIZE
+        }
+        _ => ATCA_ATSHA_CONFIG_BUFFER_SIZE,
+    }
+}
+
+pub fn atcab_read_config_zone(config_data: &mut Vec<u8>) -> AtcaStatus {
+    let buffer_size = atcab_get_config_buffer_size();
+    if config_data.len() != buffer_size {
+        config_data.resize(buffer_size, 0);
+    }
+    c2rust::c2r_enum_status(unsafe {
+        cryptoauthlib_sys::atcab_read_config_zone(config_data.as_mut_ptr())
+    })
+}
+
+pub fn atcab_cmp_config_zone(config_data: &mut Vec<u8>, same_config: &mut bool) -> AtcaStatus {
+    let buffer_size = atcab_get_config_buffer_size();
+    if config_data.len() != buffer_size {
+        return AtcaStatus::AtcaBadParam;
+    }
+    c2rust::c2r_enum_status(unsafe {
+        cryptoauthlib_sys::atcab_cmp_config_zone(config_data.as_mut_ptr(), same_config)
+    })
 }
 
 pub fn atcab_release() -> AtcaStatus {
@@ -202,6 +244,72 @@ mod tests {
             super::atcab_random(&mut rand_out).to_string(),
             "AtcaSuccess"
         );
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+    }
+    #[test]
+    #[serial]
+    fn atcab_read_config_zone() {
+        use crate::ATCA_ATECC_CONFIG_BUFFER_SIZE;
+        let atca_iface_cfg = atca_iface_setup();
+        let mut config_data = Vec::with_capacity(1024);
+        assert_eq!(atca_iface_cfg.is_ok(), true);
+        assert_eq!(
+            super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(
+            super::atcab_read_config_zone(&mut config_data).to_string(),
+            "AtcaSuccess"
+        );
+        match super::atcab_get_device_type() {
+            super::AtcaDeviceType::ATECC508A
+            | super::AtcaDeviceType::ATECC608A
+            | super::AtcaDeviceType::ATECC108A => {
+                assert_eq!(config_data.len(), ATCA_ATECC_CONFIG_BUFFER_SIZE);
+                assert_eq!(config_data[0], 0x01);
+                assert_eq!(config_data[1], 0x23);
+            }
+            _ => (),
+        };
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+    }
+    #[test]
+    #[serial]
+    fn atcab_cmp_config_zone() {
+        let atca_iface_cfg = atca_iface_setup();
+        let mut config_data = Vec::with_capacity(1024);
+        assert_eq!(atca_iface_cfg.is_ok(), true);
+        assert_eq!(
+            super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(
+            super::atcab_read_config_zone(&mut config_data).to_string(),
+            "AtcaSuccess"
+        );
+        let mut same_config = false;
+        assert_eq!(
+            super::atcab_cmp_config_zone(&mut config_data, &mut same_config).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(same_config, true);
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+    }
+    #[test]
+    #[serial]
+    fn atcab_configuration_is_locked() {
+        let atca_iface_cfg = atca_iface_setup();
+        assert_eq!(atca_iface_cfg.is_ok(), true);
+        assert_eq!(
+            super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+            "AtcaSuccess"
+        );
+        let mut is_locked = false;
+        assert_eq!(
+            super::atcab_configuration_is_locked(&mut is_locked).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(is_locked, true);
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
 }
