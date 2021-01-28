@@ -58,3 +58,14 @@ pub fn c2r_enum_status(atca_status: cryptoauthlib_sys::ATCA_STATUS) -> super::At
         _ => super::AtcaStatus::AtcaUnknown,
     }
 }
+
+pub fn c2r_enum_devtype(device_type: cryptoauthlib_sys::ATCADeviceType) -> super::AtcaDeviceType {
+    match device_type {
+        cryptoauthlib_sys::ATCADeviceType_ATSHA204A => super::AtcaDeviceType::ATSHA204A,
+        cryptoauthlib_sys::ATCADeviceType_ATECC108A => super::AtcaDeviceType::ATECC108A,
+        cryptoauthlib_sys::ATCADeviceType_ATECC508A => super::AtcaDeviceType::ATECC508A,
+        cryptoauthlib_sys::ATCADeviceType_ATECC608A => super::AtcaDeviceType::ATECC608A,
+        cryptoauthlib_sys::ATCADeviceType_ATSHA206A => super::AtcaDeviceType::ATSHA206A,
+        _ => super::AtcaDeviceType::AtcaDevUnknown,
+    }
+}
