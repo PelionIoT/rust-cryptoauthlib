@@ -1,36 +1,76 @@
 mod c2rust;
 mod rust2c;
-use std::convert::TryFrom;
-use std::sync::Mutex;
 #[cfg(test)]
 mod unit_tests;
+use std::convert::TryFrom;
+use std::sync::Mutex;
+#[macro_use]
+extern crate lazy_static;
 
 include!("./types.rs");
 
-#[allow(dead_code)]
+struct AteccResourceManager {
+    ref_counter: u8,
+}
+
+lazy_static! {
+    static ref ATECC_RESOURCE_MANAGER: Mutex<AteccResourceManager> =
+        Mutex::new(AteccResourceManager { ref_counter: 0 });
+}
+
+impl AteccResourceManager {
+    fn acquire(&mut self) -> bool {
+        if self.ref_counter == 0 {
+            self.ref_counter = 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn release(&mut self) -> bool {
+        if self.ref_counter == 1 {
+            self.ref_counter = 0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 pub struct AteccDevice {
     iface_cfg_ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg,
     api_mutex: Mutex<()>,
 }
 
 impl AteccDevice {
-    pub fn new(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice,String> {
+    pub fn new(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
+        if !ATECC_RESOURCE_MANAGER.lock().unwrap().acquire() {
+            return Err(AtcaStatus::AtcaAllocFailure.to_string());
+        }
         let iface_cfg = Box::new(match rust2c::r2c_atca_iface_cfg(r_iface_cfg) {
             Some(x) => x,
-            None => return Err(AtcaStatus::AtcaBadParam.to_string()),
+            None => {
+                ATECC_RESOURCE_MANAGER.lock().unwrap().release();
+                return Err(AtcaStatus::AtcaBadParam.to_string());
+            }
         });
-        let iface_cfg_ptr: * mut cryptoauthlib_sys::ATCAIfaceCfg = Box::into_raw(iface_cfg);
-        let init_status = c2rust::c2r_enum_status(
-            unsafe { cryptoauthlib_sys::atcab_init(iface_cfg_ptr) }
-        );
+        let iface_cfg_ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg = Box::into_raw(iface_cfg);
+        // From now on iface_cfg is consumed and iface_cfg_ptr must be stored to be released
+        // when no longer needed.
+        let init_status =
+            c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(iface_cfg_ptr) });
         let atecc_device = match init_status {
             AtcaStatus::AtcaSuccess => AteccDevice {
                 iface_cfg_ptr,
                 api_mutex: Mutex::new(()),
             },
-            _ => return Err(init_status.to_string()),
+            _ => {
+                ATECC_RESOURCE_MANAGER.lock().unwrap().release();
+                unsafe { Box::from_raw(iface_cfg_ptr) };
+                return Err(init_status.to_string());
+            }
         };
-        std::mem::forget(iface_cfg_ptr);
         Ok(atecc_device)
     } // AteccDevice::new()
 
@@ -63,7 +103,8 @@ impl AteccDevice {
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr()) })
+            cryptoauthlib_sys::atcab_random(rand_out.as_mut_ptr())
+        })
     } // AteccDevice::random()
 
     pub fn get_device(&self) -> AtcaDevice {
@@ -84,7 +125,8 @@ impl AteccDevice {
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_get_device_type() })
+            cryptoauthlib_sys::atcab_get_device_type()
+        })
     } // AteccDevice::get_device_type()
 
     fn is_locked(&self, zone: u8, is_locked: *mut bool) -> AtcaStatus {
@@ -140,12 +182,17 @@ impl AteccDevice {
     } // AteccDevice::cmp_config_zone()
 
     pub fn release(&self) -> AtcaStatus {
+        if !ATECC_RESOURCE_MANAGER.lock().unwrap().release() {
+            return AtcaStatus::AtcaBadParam;
+        }
         c2rust::c2r_enum_status(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
-            drop(self.iface_cfg_ptr);
+            // Restore iface_cfg from iface_cfg_ptr for the boxed structure to be released
+            // at the end.
+            Box::from_raw(self.iface_cfg_ptr);
             cryptoauthlib_sys::atcab_release()
         })
     } // AteccDevice::release()

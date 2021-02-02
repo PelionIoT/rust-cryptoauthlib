@@ -15,6 +15,7 @@ license = "Apache-2.0"
 [dependencies]
 cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.1.0" }
 strum_macros = "0.19.4"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
