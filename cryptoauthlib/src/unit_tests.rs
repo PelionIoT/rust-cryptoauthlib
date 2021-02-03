@@ -24,7 +24,6 @@ struct Interface {
     pub baud: u32,
 }
 
-#[allow(dead_code)]
 fn atca_iface_setup() -> Result<super::AtcaIfaceCfg, String> {
     let config_path = Path::new("config.toml");
     let config_string = read_to_string(config_path).expect("file not found");
@@ -42,9 +41,7 @@ fn atca_iface_setup() -> Result<super::AtcaIfaceCfg, String> {
     }
 }
 
-#[test]
-#[serial]
-fn atecc_new() {
+fn atecc_test_setup() -> super::AteccDevice {
     let result = atca_iface_setup();
     assert_eq!(result.is_ok(), true);
 
@@ -53,24 +50,23 @@ fn atecc_new() {
 
     let result = super::AteccDevice::new(atca_iface_cfg);
     assert_eq!(result.is_ok(), true);
+    result.unwrap()
+}
 
-    let atecc_device = result.unwrap();
+// atecc_test_teardown() is not needed, it is one-liner and if that fails, then 
+// there is a large problem - elsewhere... 
+
+#[test]
+#[serial]
+fn atecc_new() {
+    let atecc_device = atecc_test_setup();
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn atecc_sha() {
-    let result = atca_iface_setup();
-    assert_eq!(result.is_ok(), true);
-
-    let atca_iface_cfg = result.unwrap();
-    assert_eq!(atca_iface_cfg.iface_type.to_string(), "AtcaI2cIface");
-
-    let result = super::AteccDevice::new(atca_iface_cfg);
-    assert_eq!(result.is_ok(), true);
-
-    let atecc_device = result.unwrap();
+    let atecc_device = atecc_test_setup();
 
     let test_message = "TestMessage";
     let test_message_hash = [
@@ -79,58 +75,38 @@ fn atecc_sha() {
     ];
     let message = test_message.as_bytes().to_vec();
     let mut digest: Vec<u8> = Vec::new();
-
-    assert_eq!(
-        atecc_device.sha(message, &mut digest).to_string(),
-        "AtcaSuccess"
-    );
-    assert_eq!(digest, test_message_hash);
+    let atecc_device_sha = atecc_device.sha(message, &mut digest);
+    
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(atecc_device_sha.to_string(), "AtcaSuccess");
+    assert_eq!(digest, test_message_hash);
 }
 
 #[test]
 #[serial]
 fn atecc_random() {
-    let result = atca_iface_setup();
-    assert_eq!(result.is_ok(), true);
+    let atecc_device = atecc_test_setup();
 
-    let atca_iface_cfg = result.unwrap();
-    assert_eq!(atca_iface_cfg.iface_type.to_string(), "AtcaI2cIface");
-
-    let result = super::AteccDevice::new(atca_iface_cfg);
-    assert_eq!(result.is_ok(), true);
-
-    let atecc_device = result.unwrap();
     let mut rand_out = Vec::new();
+    let atecc_device_random = atecc_device.random(&mut rand_out);
 
-    assert_eq!(
-        atecc_device.random(&mut rand_out).to_string(),
-        "AtcaSuccess"
-    );
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(atecc_device_random.to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn atecc_read_config_zone() {
-    let result = atca_iface_setup();
-    assert_eq!(result.is_ok(), true);
-
-    let atca_iface_cfg = result.unwrap();
-    assert_eq!(atca_iface_cfg.iface_type.to_string(), "AtcaI2cIface");
-
-    let result = super::AteccDevice::new(atca_iface_cfg);
-    assert_eq!(result.is_ok(), true);
-
-    let atecc_device = result.unwrap();
+    let atecc_device = atecc_test_setup();
 
     use crate::ATCA_ATECC_CONFIG_BUFFER_SIZE;
     let mut config_data = Vec::new();
-    assert_eq!(
-        atecc_device.read_config_zone(&mut config_data).to_string(),
-        "AtcaSuccess"
-    );
-    match atecc_device.get_device_type() {
+    let atecc_device_read_config_zone = atecc_device.read_config_zone(&mut config_data);
+    let atecc_device_get_device_type = atecc_device.get_device_type();
+
+    assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(atecc_device_read_config_zone.to_string(), "AtcaSuccess");
+    match atecc_device_get_device_type {
         super::AtcaDeviceType::ATECC508A
         | super::AtcaDeviceType::ATECC608A
         | super::AtcaDeviceType::ATECC108A => {
@@ -138,64 +114,38 @@ fn atecc_read_config_zone() {
             assert_eq!(config_data[0], 0x01);
             assert_eq!(config_data[1], 0x23);
         }
-        _ => (),
+        _ => panic!("Unknown device type."),
     };
-    assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn atecc_cmp_config_zone() {
-    let result = atca_iface_setup();
-    assert_eq!(result.is_ok(), true);
-
-    let atca_iface_cfg = result.unwrap();
-    assert_eq!(atca_iface_cfg.iface_type.to_string(), "AtcaI2cIface");
-
-    let result = super::AteccDevice::new(atca_iface_cfg);
-    assert_eq!(result.is_ok(), true);
-
-    let atecc_device = result.unwrap();
+    let atecc_device = atecc_test_setup();
 
     let mut config_data = Vec::new();
-    assert_eq!(
-        atecc_device.read_config_zone(&mut config_data).to_string(),
-        "AtcaSuccess"
-    );
+    let atecc_device_read_config_zone = atecc_device.read_config_zone(&mut config_data);
     let mut same_config = false;
+    let atecc_device_cmp_config_zone = atecc_device.cmp_config_zone(&mut config_data, &mut same_config);
+    
+    assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(atecc_device_read_config_zone.to_string(), "AtcaSuccess");
     assert_eq!(
-        atecc_device
-            .cmp_config_zone(&mut config_data, &mut same_config)
-            .to_string(),
+        atecc_device_cmp_config_zone.to_string(),
         "AtcaSuccess"
     );
     assert_eq!(same_config, true);
-    assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn atecc_configuration_is_locked() {
-    let result = atca_iface_setup();
-    assert_eq!(result.is_ok(), true);
-
-    let atca_iface_cfg = result.unwrap();
-    assert_eq!(atca_iface_cfg.iface_type.to_string(), "AtcaI2cIface");
-
-    let result = super::AteccDevice::new(atca_iface_cfg);
-    assert_eq!(result.is_ok(), true);
-
-    let atecc_device = result.unwrap();
-
+    let atecc_device = atecc_test_setup();
     let mut is_locked = false;
-    assert_eq!(
-        atecc_device
-            .configuration_is_locked(&mut is_locked)
-            .to_string(),
-        "AtcaSuccess"
-    );
-    assert_eq!(is_locked, true);
+    let atecc_device_configuration_is_locked = atecc_device.configuration_is_locked(&mut is_locked);
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(atecc_device_configuration_is_locked.to_string(), "AtcaSuccess");
+    assert_eq!(is_locked, true);
 }
 
 //
