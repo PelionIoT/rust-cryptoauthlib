@@ -186,7 +186,7 @@ fn atecc_configuration_is_locked() {
     assert_eq!(result.is_ok(), true);
 
     let atecc_device = result.unwrap();
-    
+
     let mut is_locked = false;
     assert_eq!(
         atecc_device

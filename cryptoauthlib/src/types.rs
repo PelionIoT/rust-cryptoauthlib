@@ -144,3 +144,13 @@ pub struct AtcaDevice {
 
 unsafe impl Send for AtcaDevice {}
 unsafe impl Sync for AtcaDevice {}
+
+#[derive(Debug)]
+// supress "warning: field is never read: `dev`"
+#[allow(dead_code)]
+pub struct AtcaIfaceCfgPtrWrapper {
+    ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg,
+}
+
+unsafe impl Send for AtcaIfaceCfgPtrWrapper {}
+unsafe impl Sync for AtcaIfaceCfgPtrWrapper {}

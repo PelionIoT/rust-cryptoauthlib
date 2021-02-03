@@ -38,8 +38,9 @@ impl AteccResourceManager {
     }
 }
 
+#[derive(Debug)]
 pub struct AteccDevice {
-    iface_cfg_ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg,
+    iface_cfg_ptr: AtcaIfaceCfgPtrWrapper,
     api_mutex: Mutex<()>,
 }
 
@@ -55,19 +56,21 @@ impl AteccDevice {
                 return Err(AtcaStatus::AtcaBadParam.to_string());
             }
         });
-        let iface_cfg_ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg = Box::into_raw(iface_cfg);
+        let iface_cfg_raw_ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg = Box::into_raw(iface_cfg);
         // From now on iface_cfg is consumed and iface_cfg_ptr must be stored to be released
         // when no longer needed.
         let init_status =
-            c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(iface_cfg_ptr) });
+            c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(iface_cfg_raw_ptr) });
         let atecc_device = match init_status {
             AtcaStatus::AtcaSuccess => AteccDevice {
-                iface_cfg_ptr,
+                iface_cfg_ptr: AtcaIfaceCfgPtrWrapper {
+                    ptr: iface_cfg_raw_ptr,
+                },
                 api_mutex: Mutex::new(()),
             },
             _ => {
                 ATECC_RESOURCE_MANAGER.lock().unwrap().release();
-                unsafe { Box::from_raw(iface_cfg_ptr) };
+                unsafe { Box::from_raw(iface_cfg_raw_ptr) };
                 return Err(init_status.to_string());
             }
         };
@@ -192,7 +195,7 @@ impl AteccDevice {
                 .expect("Could not lock atcab API mutex");
             // Restore iface_cfg from iface_cfg_ptr for the boxed structure to be released
             // at the end.
-            Box::from_raw(self.iface_cfg_ptr);
+            Box::from_raw(self.iface_cfg_ptr.ptr);
             cryptoauthlib_sys::atcab_release()
         })
     } // AteccDevice::release()
