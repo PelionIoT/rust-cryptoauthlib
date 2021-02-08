@@ -102,6 +102,88 @@ pub fn atcab_cmp_config_zone(config_data: &mut Vec<u8>, same_config: &mut bool) 
     })
 }
 
+fn atcab_get_bit_value(byte: u8, bit_pos: u8) -> bool {
+    if bit_pos < 8 {
+        ((byte >> bit_pos) & 1) != 0
+    } else {
+        false
+    }
+}
+
+fn atcab_get_write_config(data: u8) -> WriteConfig {
+    match data & 0b00001111 {
+        0 => WriteConfig::Always,
+        1 => WriteConfig::PubInvalid,
+        2..=3 => WriteConfig::Never,
+        4..=7 => WriteConfig::Encrypt,
+        8..=11 => WriteConfig::Never,
+        _ => WriteConfig::Encrypt,
+    }
+}
+
+fn atcab_get_key_type(data: u8) -> KeyType {
+    match data & 0b00000111 {
+        4 => KeyType::P256EccKey,
+        6 => KeyType::Aes,
+        7 => KeyType::ShaOrText,
+        _ => KeyType::Rfu,
+    }
+}
+
+pub fn atcab_get_config(config_data: &[u8], atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus {
+    const IDX_SLOT_LOCKED: usize = 88;
+    const IDX_SLOT_CONFIG: usize = 20;
+    const IDX_KEY_CONFIG: usize = 96;
+    if config_data.len() != atcab_get_config_buffer_size() {
+        return AtcaStatus::AtcaBadParam;
+    }
+    *atca_slots = Vec::new();
+    for _id in 0..ATCA_ATECC_SLOTS {
+        let _slot_cfg_pos = IDX_SLOT_CONFIG + (_id * 2) as usize;
+        let _key_cfg_pos = IDX_KEY_CONFIG + (_id * 2) as usize;
+        let _read_key = ReadKey {
+            encrypt_read: atcab_get_bit_value(config_data[_slot_cfg_pos], 6),
+            slot_number: config_data[_slot_cfg_pos] & 0b00001111,
+        };
+        let _ecc_key_attr = EccKeyAttr {
+            is_private: atcab_get_bit_value(config_data[_key_cfg_pos], 0),
+            ext_sign: atcab_get_bit_value(config_data[_slot_cfg_pos], 0),
+            int_sign: atcab_get_bit_value(config_data[_slot_cfg_pos], 1),
+            ecdh_operation: atcab_get_bit_value(config_data[_slot_cfg_pos], 2),
+            ecdh_secret_out: atcab_get_bit_value(config_data[_slot_cfg_pos], 3),
+        };
+        let _config = SlotConfig {
+            write_config: atcab_get_write_config(config_data[_slot_cfg_pos + 1] >> 4),
+            key_type: atcab_get_key_type(config_data[_key_cfg_pos] >> 2),
+            read_key: _read_key,
+            ecc_key_attr: _ecc_key_attr,
+            x509id: (config_data[_key_cfg_pos + 1] >> 6) & 0b00000011,
+            auth_key: config_data[_key_cfg_pos + 1] & 0b00001111,
+            write_key: config_data[_slot_cfg_pos + 1] & 0b00001111,
+            is_secret: atcab_get_bit_value(config_data[_slot_cfg_pos], 7),
+            limited_use: atcab_get_bit_value(config_data[_slot_cfg_pos], 5),
+            no_mac: atcab_get_bit_value(config_data[_slot_cfg_pos], 4),
+            persistent_disable: atcab_get_bit_value(config_data[_key_cfg_pos + 1], 4),
+            req_auth: atcab_get_bit_value(config_data[_key_cfg_pos], 7),
+            req_random: atcab_get_bit_value(config_data[_key_cfg_pos], 6),
+            lockable: atcab_get_bit_value(config_data[_key_cfg_pos], 5),
+            pub_info: atcab_get_bit_value(config_data[_key_cfg_pos], 1),
+        };
+        let slot = AtcaSlot {
+            id: _id,
+            is_locked: {
+                let _index = IDX_SLOT_LOCKED + (_id / 8) as usize;
+                let _bit_position = _id % 8;
+                let _bit_value = (config_data[_index] >> _bit_position) & 1;
+                _bit_value != 1
+            },
+            config: _config,
+        };
+        atca_slots.push(slot);
+    }
+    AtcaStatus::AtcaSuccess
+}
+
 pub fn atcab_release() -> AtcaStatus {
     c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_release() })
 }
@@ -310,6 +392,39 @@ mod tests {
             "AtcaSuccess"
         );
         assert_eq!(is_locked, true);
+        assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+    }
+    #[test]
+    #[serial]
+    fn atcab_get_config() {
+        // to be improved
+        use crate::ATCA_ATECC_SLOTS;
+        let atca_iface_cfg = atca_iface_setup();
+        let mut config_data = Vec::with_capacity(128);
+        assert_eq!(atca_iface_cfg.is_ok(), true);
+        assert_eq!(
+            super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+            "AtcaSuccess"
+        );
+        assert_eq!(
+            super::atcab_read_config_zone(&mut config_data).to_string(),
+            "AtcaSuccess"
+        );
+        config_data[88] = 0b10111111;
+        config_data[89] = 0b01111111;
+        config_data[20] = 0b10000000;
+        config_data[22] = 0b00000000;
+        let mut atca_slots: Vec<super::AtcaSlot> = Vec::new();
+        let result = super::atcab_get_config(&config_data, &mut atca_slots);
+        assert_eq!(result.to_string(), "AtcaSuccess");
+        assert_eq!(atca_slots.len(), usize::from(ATCA_ATECC_SLOTS));
+        assert_eq!(atca_slots[0].id, 0);
+        assert_eq!(atca_slots[15].id, 15);
+        assert_eq!(atca_slots[0].is_locked, false);
+        assert_eq!(atca_slots[6].is_locked, true);
+        assert_eq!(atca_slots[15].is_locked, true);
+        assert_eq!(atca_slots[0].config.is_secret, true);
+        assert_eq!(atca_slots[1].config.is_secret, false);
         assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
     }
 }
