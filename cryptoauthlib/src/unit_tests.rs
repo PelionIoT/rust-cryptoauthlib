@@ -53,8 +53,8 @@ fn atecc_test_setup() -> super::AteccDevice {
     result.unwrap()
 }
 
-// atecc_test_teardown() is not needed, it is one-liner and if that fails, then 
-// there is a large problem - elsewhere... 
+// atecc_test_teardown() is not needed, it is one-liner and if that fails, then
+// there is a large problem - elsewhere...
 
 #[test]
 #[serial]
@@ -76,7 +76,7 @@ fn atecc_sha() {
     let message = test_message.as_bytes().to_vec();
     let mut digest: Vec<u8> = Vec::new();
     let atecc_device_sha = atecc_device.sha(message, &mut digest);
-    
+
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
     assert_eq!(atecc_device_sha.to_string(), "AtcaSuccess");
     assert_eq!(digest, test_message_hash);
@@ -126,14 +126,12 @@ fn atecc_cmp_config_zone() {
     let mut config_data = Vec::new();
     let atecc_device_read_config_zone = atecc_device.read_config_zone(&mut config_data);
     let mut same_config = false;
-    let atecc_device_cmp_config_zone = atecc_device.cmp_config_zone(&mut config_data, &mut same_config);
-    
+    let atecc_device_cmp_config_zone =
+        atecc_device.cmp_config_zone(&mut config_data, &mut same_config);
+
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
     assert_eq!(atecc_device_read_config_zone.to_string(), "AtcaSuccess");
-    assert_eq!(
-        atecc_device_cmp_config_zone.to_string(),
-        "AtcaSuccess"
-    );
+    assert_eq!(atecc_device_cmp_config_zone.to_string(), "AtcaSuccess");
     assert_eq!(same_config, true);
 }
 
@@ -144,8 +142,52 @@ fn atecc_configuration_is_locked() {
     let mut is_locked = false;
     let atecc_device_configuration_is_locked = atecc_device.configuration_is_locked(&mut is_locked);
     assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
-    assert_eq!(atecc_device_configuration_is_locked.to_string(), "AtcaSuccess");
+    assert_eq!(
+        atecc_device_configuration_is_locked.to_string(),
+        "AtcaSuccess"
+    );
     assert_eq!(is_locked, true);
+}
+
+#[test]
+#[serial]
+fn atecc_get_config_from_config_zone() {
+    // to be improved
+    use crate::ATCA_ATECC_SLOTS;
+    let mut config_data = Vec::new();
+    let atecc_device = atecc_test_setup();
+    let atecc_device_atcab_read_config_zone = atecc_device.read_config_zone(&mut config_data);
+
+    config_data[88] = 0b10111111;
+    config_data[89] = 0b01111111;
+    config_data[20] = 0b10000000;
+    config_data[22] = 0b00000000;
+    let mut atca_slots: Vec<super::AtcaSlot> = Vec::new();
+    super::atcab_get_config_from_config_zone(&config_data, &mut atca_slots);
+
+    assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(
+        atecc_device_atcab_read_config_zone.to_string(),
+        "AtcaSuccess"
+    );
+    assert_eq!(atca_slots.len(), usize::from(ATCA_ATECC_SLOTS));
+    assert_eq!(atca_slots[0].id, 0);
+    assert_eq!(atca_slots[15].id, 15);
+    assert_eq!(atca_slots[0].is_locked, false);
+    assert_eq!(atca_slots[6].is_locked, true);
+    assert_eq!(atca_slots[15].is_locked, true);
+    assert_eq!(atca_slots[0].config.is_secret, true);
+    assert_eq!(atca_slots[1].config.is_secret, false);
+}
+
+#[test]
+#[serial]
+fn atecc_get_config() {
+    let atecc_device = atecc_test_setup();
+    let mut atca_slots: Vec<super::AtcaSlot> = Vec::new();
+    let atecc_get_config = atecc_device.get_config(&mut atca_slots);
+    assert_eq!(atecc_device.release().to_string(), "AtcaSuccess");
+    assert_eq!(atecc_get_config.to_string(), "AtcaSuccess");
 }
 
 //
@@ -268,5 +310,38 @@ fn atecc_configuration_is_locked() {
 //         "AtcaSuccess"
 //     );
 //     assert_eq!(is_locked, true);
+//     assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
+// }
+// #[test]
+// #[serial]
+// fn atcab_get_config() {
+//     // to be improved
+//     use crate::ATCA_ATECC_SLOTS;
+//     let atca_iface_cfg = atca_iface_setup();
+//     let mut config_data = Vec::with_capacity(128);
+//     assert_eq!(atca_iface_cfg.is_ok(), true);
+//     assert_eq!(
+//         super::atcab_init(atca_iface_cfg.unwrap()).to_string(),
+//         "AtcaSuccess"
+//     );
+//     assert_eq!(
+//         super::atcab_read_config_zone(&mut config_data).to_string(),
+//         "AtcaSuccess"
+//     );
+//     config_data[88] = 0b10111111;
+//     config_data[89] = 0b01111111;
+//     config_data[20] = 0b10000000;
+//     config_data[22] = 0b00000000;
+//     let mut atca_slots: Vec<super::AtcaSlot> = Vec::new();
+//     let result = super::atcab_get_config(&config_data, &mut atca_slots);
+//     assert_eq!(result.to_string(), "AtcaSuccess");
+//     assert_eq!(atca_slots.len(), usize::from(ATCA_ATECC_SLOTS));
+//     assert_eq!(atca_slots[0].id, 0);
+//     assert_eq!(atca_slots[15].id, 15);
+//     assert_eq!(atca_slots[0].is_locked, false);
+//     assert_eq!(atca_slots[6].is_locked, true);
+//     assert_eq!(atca_slots[15].is_locked, true);
+//     assert_eq!(atca_slots[0].config.is_secret, true);
+//     assert_eq!(atca_slots[1].config.is_secret, false);
 //     assert_eq!(super::atcab_release().to_string(), "AtcaSuccess");
 // }
