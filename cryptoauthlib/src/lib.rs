@@ -209,6 +209,9 @@ impl AteccDevice {
         if config_data.len() != self.get_config_buffer_size() {
             return AtcaStatus::AtcaBadParam;
         }
+        // Drop the input atca_slots as well as all of its contents
+        // ... and create a new one
+        *atca_slots = Vec::new();
         atcab_get_config_from_config_zone(&config_data, atca_slots);
         AtcaStatus::AtcaSuccess
     }
