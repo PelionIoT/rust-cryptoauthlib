@@ -12,14 +12,14 @@ pub const ATCA_ZONE_OTP: u8 = 0x01;
 pub const ATCA_ZONE_DATA: u8 = 0x02;
 pub const ATCA_ATECC_SLOTS: u8 = 16;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct AtcaSlot {
     pub id: u8,
     pub is_locked: bool,
     pub config: SlotConfig,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SlotConfig {
     /// Controls the ability to modify the data in this slot.
     pub write_config: WriteConfig,
@@ -121,7 +121,7 @@ pub struct SlotConfig {
     pub pub_info: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct EccKeyAttr {
     /// true = The key slot contains an ECC private key and
     /// can be accessed only with the Sign, GenKey, and PrivWrite commands.
@@ -154,7 +154,7 @@ pub struct EccKeyAttr {
     pub ecdh_secret_out: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ReadKey {
     /// true = Reads from this slot will be encrypted using the procedure
     /// specified in the Read command using value of 'slot_number'
@@ -173,7 +173,7 @@ pub struct ReadKey {
     pub slot_number: u8,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum WriteConfig {
     Rfu,    // do not use
 
@@ -198,7 +198,7 @@ pub enum WriteConfig {
     Encrypt,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum KeyType {
     Rfu,    // do not use
     P256EccKey,
