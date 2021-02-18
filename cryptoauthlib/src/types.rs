@@ -198,7 +198,7 @@ pub enum WriteConfig {
     Encrypt,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum KeyType {
     Rfu,    // do not use
     P256EccKey,
