@@ -110,6 +110,132 @@ impl AteccDevice {
         })
     } // AteccDevice::random()
 
+    fn read_zone(
+        &self,
+        zone: u8,
+        slot: u16,
+        block: u8,
+        offset: u8,
+        data: &mut Vec<u8>,
+        len: u8,
+    ) -> AtcaStatus {
+        if data.len() != len as usize {
+            data.resize(len as usize, 0)
+        };
+        c2rust::c2r_enum_status(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_read_zone(zone, slot, block, offset, data.as_mut_ptr(), len)
+        })
+    } // AteccDevice::read_zone()
+
+    fn write_zone(
+        &self,
+        zone: u8,
+        slot: u16,
+        block: u8,
+        offset: u8,
+        data: &mut Vec<u8>,
+        len: u8,
+    ) -> AtcaStatus {
+        if data.len() != len as usize {
+            data.resize(len as usize, 0)
+        };
+        c2rust::c2r_enum_status(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_write_zone(zone, slot, block, offset, data.as_mut_ptr(), len)
+        })
+    } // AteccDevice::write_zone()
+
+    fn aes_enabled(&self) -> Result<bool, AtcaStatus> {
+        const LEN: u8 = 4;
+        const OFFSET: u8 = 3;
+        const INDEX_OF_AES_BYTE: usize = 1;
+        const INDEX_OF_AES_BIT: u8 = 0;
+
+        let mut data: Vec<u8> = Vec::with_capacity(LEN as usize);
+        let result = self.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET, &mut data, LEN);
+        if result != AtcaStatus::AtcaSuccess {
+            Err(result)
+        } else {
+            Ok(atcab_get_bit_value(
+                data[INDEX_OF_AES_BYTE],
+                INDEX_OF_AES_BIT,
+            ))
+        }
+    }
+
+    pub fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
+        let mut _aes_enabled: bool = false;
+        if key_type == KeyType::Aes {
+            match self.aes_enabled() {
+                Ok(val) => {
+                    _aes_enabled = val;
+                }
+                Err(err) => return err,
+            }
+        };
+
+        if (slot_number > ATCA_ATECC_SLOTS_COUNT)
+            | ((slot_number == ATCA_ATECC_SLOTS_COUNT) & (key_type != KeyType::Aes))    // This is a special situation when an AES key can be generated in an ATECC TempKey slot.
+            | ((key_type == KeyType::Aes) & !_aes_enabled)
+        {
+            return AtcaStatus::AtcaBadParam;
+        }
+
+        let slot = match slot_number {
+            ATCA_ATECC_SLOTS_COUNT => cryptoauthlib_sys::ATCA_TEMPKEY_KEYID as u16,
+            _ => slot_number as u16,
+        };
+
+        match key_type {
+            KeyType::P256EccKey => {
+                use std::ptr;
+                return c2rust::c2r_enum_status(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_genkey(slot, ptr::null_mut() as *mut u8)
+                });
+            }
+            KeyType::Aes => {
+                let mut key: Vec<u8> = Vec::with_capacity(ATCA_RANDOM_BUFFER_SIZE);
+                let result = self.random(&mut key);
+                if result != AtcaStatus::AtcaSuccess {
+                    return result;
+                };
+                if key.len() > ATCA_AES_KEY_SIZE {
+                    key.truncate(ATCA_AES_KEY_SIZE);
+                }
+                if key.len() < cryptoauthlib_sys::ATCA_BLOCK_SIZE as usize {
+                    key.resize(cryptoauthlib_sys::ATCA_BLOCK_SIZE as usize, 0);
+                }
+                if slot != cryptoauthlib_sys::ATCA_TEMPKEY_KEYID as u16 {
+                    const BLOCK_IDX: u8 = 0;
+                    const OFFSET: u8 = 0;
+                    // It will generate an error when SlotConfig.write_config = Encrypt
+                    self.write_zone(
+                        ATCA_ZONE_DATA,
+                        slot,
+                        BLOCK_IDX,
+                        OFFSET,
+                        &mut key,
+                        cryptoauthlib_sys::ATCA_BLOCK_SIZE as u8,
+                    )
+                } else {
+                    AtcaStatus::AtcaUnimplemented
+                }
+            }
+            _ => AtcaStatus::AtcaBadParam,
+        }
+    } // AteccDevice::gen_key()
+
     pub fn get_device(&self) -> AtcaDevice {
         AtcaDevice {
             dev: unsafe {
@@ -293,46 +419,46 @@ fn atcab_get_config_from_config_zone(config_data: &[u8], atca_slots: &mut Vec<At
     const IDX_SLOT_LOCKED: usize = 88;
     const IDX_SLOT_CONFIG: usize = 20;
     const IDX_KEY_CONFIG: usize = 96;
-    for _id in 0..ATCA_ATECC_SLOTS {
-        let _slot_cfg_pos = IDX_SLOT_CONFIG + (_id * 2) as usize;
-        let _key_cfg_pos = IDX_KEY_CONFIG + (_id * 2) as usize;
-        let _read_key = ReadKey {
-            encrypt_read: atcab_get_bit_value(config_data[_slot_cfg_pos], 6),
-            slot_number: config_data[_slot_cfg_pos] & 0b00001111,
+    for idx in 0..ATCA_ATECC_SLOTS_COUNT {
+        let slot_cfg_pos = IDX_SLOT_CONFIG + (idx * 2) as usize;
+        let key_cfg_pos = IDX_KEY_CONFIG + (idx * 2) as usize;
+        let read_key_struct = ReadKey {
+            encrypt_read: atcab_get_bit_value(config_data[slot_cfg_pos], 6),
+            slot_number: config_data[slot_cfg_pos] & 0b00001111,
         };
-        let _ecc_key_attr = EccKeyAttr {
-            is_private: atcab_get_bit_value(config_data[_key_cfg_pos], 0),
-            ext_sign: atcab_get_bit_value(config_data[_slot_cfg_pos], 0),
-            int_sign: atcab_get_bit_value(config_data[_slot_cfg_pos], 1),
-            ecdh_operation: atcab_get_bit_value(config_data[_slot_cfg_pos], 2),
-            ecdh_secret_out: atcab_get_bit_value(config_data[_slot_cfg_pos], 3),
+        let ecc_key_attr_struct = EccKeyAttr {
+            is_private: atcab_get_bit_value(config_data[key_cfg_pos], 0),
+            ext_sign: atcab_get_bit_value(config_data[slot_cfg_pos], 0),
+            int_sign: atcab_get_bit_value(config_data[slot_cfg_pos], 1),
+            ecdh_operation: atcab_get_bit_value(config_data[slot_cfg_pos], 2),
+            ecdh_secret_out: atcab_get_bit_value(config_data[slot_cfg_pos], 3),
         };
-        let _config = SlotConfig {
-            write_config: atcab_get_write_config(config_data[_slot_cfg_pos + 1] >> 4),
-            key_type: atcab_get_key_type(config_data[_key_cfg_pos] >> 2),
-            read_key: _read_key,
-            ecc_key_attr: _ecc_key_attr,
-            x509id: (config_data[_key_cfg_pos + 1] >> 6) & 0b00000011,
-            auth_key: config_data[_key_cfg_pos + 1] & 0b00001111,
-            write_key: config_data[_slot_cfg_pos + 1] & 0b00001111,
-            is_secret: atcab_get_bit_value(config_data[_slot_cfg_pos], 7),
-            limited_use: atcab_get_bit_value(config_data[_slot_cfg_pos], 5),
-            no_mac: atcab_get_bit_value(config_data[_slot_cfg_pos], 4),
-            persistent_disable: atcab_get_bit_value(config_data[_key_cfg_pos + 1], 4),
-            req_auth: atcab_get_bit_value(config_data[_key_cfg_pos], 7),
-            req_random: atcab_get_bit_value(config_data[_key_cfg_pos], 6),
-            lockable: atcab_get_bit_value(config_data[_key_cfg_pos], 5),
-            pub_info: atcab_get_bit_value(config_data[_key_cfg_pos], 1),
+        let config_struct = SlotConfig {
+            write_config: atcab_get_write_config(config_data[slot_cfg_pos + 1] >> 4),
+            key_type: atcab_get_key_type(config_data[key_cfg_pos] >> 2),
+            read_key: read_key_struct,
+            ecc_key_attr: ecc_key_attr_struct,
+            x509id: (config_data[key_cfg_pos + 1] >> 6) & 0b00000011,
+            auth_key: config_data[key_cfg_pos + 1] & 0b00001111,
+            write_key: config_data[slot_cfg_pos + 1] & 0b00001111,
+            is_secret: atcab_get_bit_value(config_data[slot_cfg_pos], 7),
+            limited_use: atcab_get_bit_value(config_data[slot_cfg_pos], 5),
+            no_mac: atcab_get_bit_value(config_data[slot_cfg_pos], 4),
+            persistent_disable: atcab_get_bit_value(config_data[key_cfg_pos + 1], 4),
+            req_auth: atcab_get_bit_value(config_data[key_cfg_pos], 7),
+            req_random: atcab_get_bit_value(config_data[key_cfg_pos], 6),
+            lockable: atcab_get_bit_value(config_data[key_cfg_pos], 5),
+            pub_info: atcab_get_bit_value(config_data[key_cfg_pos], 1),
         };
         let slot = AtcaSlot {
-            id: _id,
+            id: idx,
             is_locked: {
-                let _index = IDX_SLOT_LOCKED + (_id / 8) as usize;
-                let _bit_position = _id % 8;
-                let _bit_value = (config_data[_index] >> _bit_position) & 1;
-                _bit_value != 1
+                let index = IDX_SLOT_LOCKED + (idx / 8) as usize;
+                let bit_position = idx % 8;
+                let bit_value = (config_data[index] >> bit_position) & 1;
+                bit_value != 1
             },
-            config: _config,
+            config: config_struct,
         };
         atca_slots.push(slot);
     }
@@ -448,7 +574,7 @@ pub fn atcab_get_config(config_data: &[u8], atca_slots: &mut Vec<AtcaSlot>) -> A
         return AtcaStatus::AtcaBadParam;
     }
     *atca_slots = Vec::new();
-    for _id in 0..ATCA_ATECC_SLOTS {
+    for _id in 0..ATCA_ATECC_SLOTS_COUNT {
         let _slot_cfg_pos = IDX_SLOT_CONFIG + (_id * 2) as usize;
         let _key_cfg_pos = IDX_KEY_CONFIG + (_id * 2) as usize;
         let _read_key = ReadKey {
