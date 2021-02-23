@@ -2,7 +2,7 @@ mod c2rust;
 mod rust2c;
 #[cfg(test)]
 mod unit_tests;
-use std::convert::TryFrom;
+use std::convert::{From, TryFrom};
 use std::sync::Mutex;
 #[macro_use]
 extern crate lazy_static;
@@ -49,18 +49,20 @@ impl AteccDevice {
         if !ATECC_RESOURCE_MANAGER.lock().unwrap().acquire() {
             return Err(AtcaStatus::AtcaAllocFailure.to_string());
         }
-        let iface_cfg = Box::new(match rust2c::r2c_atca_iface_cfg(r_iface_cfg) {
-            Some(x) => x,
-            None => {
-                ATECC_RESOURCE_MANAGER.lock().unwrap().release();
-                return Err(AtcaStatus::AtcaBadParam.to_string());
-            }
-        });
+        let iface_cfg = Box::new(
+            match cryptoauthlib_sys::ATCAIfaceCfg::try_from(r_iface_cfg) {
+                Ok(x) => x,
+                Err(()) => {
+                    ATECC_RESOURCE_MANAGER.lock().unwrap().release();
+                    return Err(AtcaStatus::AtcaBadParam.to_string());
+                }
+            },
+        );
         let iface_cfg_raw_ptr: *mut cryptoauthlib_sys::ATCAIfaceCfg = Box::into_raw(iface_cfg);
         // From now on iface_cfg is consumed and iface_cfg_ptr must be stored to be released
         // when no longer needed.
         let init_status =
-            c2rust::c2r_enum_status(unsafe { cryptoauthlib_sys::atcab_init(iface_cfg_raw_ptr) });
+            AtcaStatus::from(unsafe { cryptoauthlib_sys::atcab_init(iface_cfg_raw_ptr) });
         let atecc_device = match init_status {
             AtcaStatus::AtcaSuccess => AteccDevice {
                 iface_cfg_ptr: AtcaIfaceCfgPtrWrapper {
@@ -88,7 +90,7 @@ impl AteccDevice {
         if digest.len() != digest_size {
             digest.resize(digest_size, 0);
         }
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -101,7 +103,7 @@ impl AteccDevice {
         if rand_out.len() != ATCA_RANDOM_BUFFER_SIZE {
             rand_out.resize(ATCA_RANDOM_BUFFER_SIZE, 0);
         }
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -122,7 +124,7 @@ impl AteccDevice {
         if data.len() != len as usize {
             data.resize(len as usize, 0)
         };
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -143,7 +145,7 @@ impl AteccDevice {
         if data.len() != len as usize {
             data.resize(len as usize, 0)
         };
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -196,7 +198,7 @@ impl AteccDevice {
         match key_type {
             KeyType::P256EccKey => {
                 use std::ptr;
-                return c2rust::c2r_enum_status(unsafe {
+                return AtcaStatus::from(unsafe {
                     let _guard = self
                         .api_mutex
                         .lock()
@@ -249,7 +251,7 @@ impl AteccDevice {
     } // AteccDevice::get_device()
 
     pub fn get_device_type(&self) -> AtcaDeviceType {
-        c2rust::c2r_enum_devtype(unsafe {
+        AtcaDeviceType::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -259,7 +261,7 @@ impl AteccDevice {
     } // AteccDevice::get_device_type()
 
     fn is_locked(&self, zone: u8, is_locked: *mut bool) -> AtcaStatus {
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -287,7 +289,7 @@ impl AteccDevice {
         if config_data.len() != buffer_size {
             config_data.resize(buffer_size, 0);
         }
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -301,7 +303,7 @@ impl AteccDevice {
         if config_data.len() != buffer_size {
             return AtcaStatus::AtcaBadParam;
         }
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
@@ -314,7 +316,7 @@ impl AteccDevice {
         if !ATECC_RESOURCE_MANAGER.lock().unwrap().release() {
             return AtcaStatus::AtcaBadParam;
         }
-        c2rust::c2r_enum_status(unsafe {
+        AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
