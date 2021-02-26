@@ -19,6 +19,7 @@ lazy_static! {
 }
 
 impl AteccResourceManager {
+    // Aquire an acceptance to create an ATECC instance
     fn acquire(&mut self) -> bool {
         if self.ref_counter == 0 {
             self.ref_counter = 1;
@@ -28,6 +29,7 @@ impl AteccResourceManager {
         }
     }
 
+    // Release a reservation of an ATECC instance
     fn release(&mut self) -> bool {
         if self.ref_counter == 1 {
             self.ref_counter = 0;
@@ -38,13 +40,19 @@ impl AteccResourceManager {
     }
 }
 
+/// An ATECC cryptochip context holder.
 #[derive(Debug)]
 pub struct AteccDevice {
+    /// Interface configuration to be stored on a heap to avoid side effects of
+    /// Rust and C interoperability
     iface_cfg_ptr: AtcaIfaceCfgPtrWrapper,
+    /// A mutex to ensure a mutual access from different threads to an ATECC instance
     api_mutex: Mutex<()>,
 }
 
+/// Implementation of CryptoAuth Library API Rust wrapper calls
 impl AteccDevice {
+    /// ATECC device instance constructor
     pub fn new(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
         if !ATECC_RESOURCE_MANAGER.lock().unwrap().acquire() {
             return Err(AtcaStatus::AtcaAllocFailure.to_string());
@@ -79,6 +87,7 @@ impl AteccDevice {
         Ok(atecc_device)
     } // AteccDevice::new()
 
+    /// Request ATECC to compute a message hash (SHA256)
     pub fn sha(&self, message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
         let length: u16 = match u16::try_from(message.len()) {
             Ok(val) => val,
@@ -99,6 +108,7 @@ impl AteccDevice {
         })
     } // AteccDevice::sha()
 
+    /// Request ATECC to generate a vector of random bytes
     pub fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
         if rand_out.len() != ATCA_RANDOM_BUFFER_SIZE {
             rand_out.resize(ATCA_RANDOM_BUFFER_SIZE, 0);
@@ -172,6 +182,7 @@ impl AteccDevice {
         }
     }
 
+    /// Request ATECC to generate a cryptographic key
     pub fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
         let mut _aes_enabled: bool = false;
         if key_type == KeyType::Aes {
@@ -238,6 +249,7 @@ impl AteccDevice {
         }
     } // AteccDevice::gen_key()
 
+    #[allow(deprecated)]
     pub fn get_device(&self) -> AtcaDevice {
         AtcaDevice {
             dev: unsafe {
@@ -250,6 +262,7 @@ impl AteccDevice {
         }
     } // AteccDevice::get_device()
 
+    /// Request ATECC to return own device type
     pub fn get_device_type(&self) -> AtcaDeviceType {
         AtcaDeviceType::from(unsafe {
             let _guard = self
@@ -270,6 +283,8 @@ impl AteccDevice {
         })
     } // AteccDevice::is_locked()
 
+    /// Request ATECC to check if its configuration is locked.
+    /// If true, a chip can be used for cryptographic operations
     pub fn configuration_is_locked(&self, is_locked: &mut bool) -> AtcaStatus {
         self.is_locked(ATCA_ZONE_CONFIG, is_locked)
     } // AteccDevice::configuration_is_locked()
@@ -284,6 +299,9 @@ impl AteccDevice {
         }
     } // AteccDevice::get_config_buffer_size()
 
+    /// Request ATECC to read and return own configuration zone.
+    /// Note: this function returns raw data, function get_config(..) implements a more
+    /// structured return value.
     pub fn read_config_zone(&self, config_data: &mut Vec<u8>) -> AtcaStatus {
         let buffer_size = self.get_config_buffer_size();
         if config_data.len() != buffer_size {
@@ -298,6 +316,8 @@ impl AteccDevice {
         })
     } // AteccDevice::read_config_zone()
 
+    /// Compare internal config zone contents vs. config_data.
+    /// Diagnostic function.
     pub fn cmp_config_zone(&self, config_data: &mut Vec<u8>, same_config: &mut bool) -> AtcaStatus {
         let buffer_size = self.get_config_buffer_size();
         if config_data.len() != buffer_size {
@@ -312,6 +332,11 @@ impl AteccDevice {
         })
     } // AteccDevice::cmp_config_zone()
 
+    /// ATECC device instance destructor
+    // Requests:
+    // 1. Internal rust-cryptoauthlib resource manager to release structure instance
+    // 2. The structure itself to free the heap allocacted data
+    // 3. CryptoAuthLib to release the ATECC device
     pub fn release(&self) -> AtcaStatus {
         if !ATECC_RESOURCE_MANAGER.lock().unwrap().release() {
             return AtcaStatus::AtcaBadParam;
@@ -328,6 +353,7 @@ impl AteccDevice {
         })
     } // AteccDevice::release()
 
+    /// Request ATECC to read the configuration zone data and return it in a structure
     pub fn get_config(&self, atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus {
         let mut config_data = Vec::new();
         let err = self.read_config_zone(&mut config_data);
@@ -345,6 +371,9 @@ impl AteccDevice {
     }
 }
 
+/// Setup an ATECC interface configuration (AtcaIfaceCfg)
+/// based on a device type and I2C parameters.
+/// This is a helper function, created for I2C exclusively.
 pub fn atca_iface_setup_i2c(
     device_type: String,
     wake_delay: u16,
