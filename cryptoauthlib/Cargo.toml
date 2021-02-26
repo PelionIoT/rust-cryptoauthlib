@@ -1,7 +1,10 @@
 [package]
 name = "rust-cryptoauthlib"
 version = "0.2.0"
-authors = ["Robert.Drazkowski@globallogic.com"]
+authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
+           "Michal Protasowicki <michal.protasowicki@globallogic.com>",
+           "Krzysztof Bembnista <krzysztof.bembnista@globallogic.com>",
+           "Artur Kazimierski <artur.kazimierski@@globallogic.com>"]
 edition = "2018"
 description = "Rust wrappers for CryptoAuthentication Library bindings."
 repository = "https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib/"
