@@ -1,7 +1,10 @@
 [package]
 name = "cryptoauthlib-sys"
-version = "0.1.0"
-authors = ["Robert.Drazkowski@globallogic.com"]
+version = "0.2.0"
+authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
+           "Michal Protasowicki <michal.protasowicki@globallogic.com>",
+           "Krzysztof Bembnista <krzysztof.bembnista@globallogic.com>",
+           "Artur Kazimierski <artur.kazimierski@@globallogic.com>"]
 edition = "2018"
 description = "Automatically generated Rust bindings for CryptoAuthentication Library calls."
 repository = "https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib/"

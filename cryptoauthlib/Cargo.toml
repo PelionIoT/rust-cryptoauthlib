@@ -1,7 +1,10 @@
 [package]
 name = "rust-cryptoauthlib"
-version = "0.1.0"
-authors = ["Robert.Drazkowski@globallogic.com"]
+version = "0.2.0"
+authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
+           "Michal Protasowicki <michal.protasowicki@globallogic.com>",
+           "Krzysztof Bembnista <krzysztof.bembnista@globallogic.com>",
+           "Artur Kazimierski <artur.kazimierski@@globallogic.com>"]
 edition = "2018"
 description = "Rust wrappers for CryptoAuthentication Library bindings."
 repository = "https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib/"
@@ -13,8 +16,9 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.1.0" }
+cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.2.0" }
 strum_macros = "0.19.4"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }

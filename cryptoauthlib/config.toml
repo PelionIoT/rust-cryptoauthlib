@@ -1,7 +1,7 @@
 [device]
 device_type = "atecc508a"
 iface_type = "i2c"
-wake_delay = 1500
+wake_delay = 1600
 rx_retries = 20
 
 [interface]
