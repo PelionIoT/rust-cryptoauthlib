@@ -16,7 +16,7 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cryptoauthlib-sys = { path = "../cryptoauthlib-sys" }
+cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.2.*" }
 strum_macros = "0.19.4"
 lazy_static = "1.4.0"
 
