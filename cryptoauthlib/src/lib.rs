@@ -203,7 +203,7 @@ impl AteccDevice {
                 .expect("Could not lock atcab API mutex");
             cryptoauthlib_sys::atcab_nonce_load(target as u8, data.as_ptr(), data.len() as u16)
         })
-    }
+    } // AteccDevice::nonce()
 
     /// Execute a Nonce command to generate a random nonce combining a host
     /// nonce and a device random number.
@@ -221,7 +221,7 @@ impl AteccDevice {
                 .expect("Could not lock atcab API mutex");
             cryptoauthlib_sys::atcab_nonce_rand(host_nonce.as_ptr(), rand_out.as_mut_ptr())
         })
-    }
+    } // AteccDevice::nonce_rand()
 
     /// Request ATECC to generate a cryptographic key
     pub fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
@@ -382,6 +382,118 @@ impl AteccDevice {
         }
     } // AteccDevice::import_key()
 
+    /// Function to calculate the public key from an existing private key in a slot
+    pub fn get_public_key(&self, slot_number: u8, public_key: &mut Vec<u8>) -> AtcaStatus {
+        if slot_number > ATCA_ATECC_SLOTS_COUNT {
+            return AtcaStatus::AtcaInvalidId;
+        }
+        public_key.resize(ATCA_ATECC_PUB_KEY_SIZE, 0);
+        AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_get_pubkey(slot_number as u16, public_key.as_mut_ptr())
+        })
+    } // AteccDevice::get_public_key()
+
+    /// Request ATECC to generate an ECDSA signature
+    pub fn sign_hash(
+        &self,
+        mode: SignMode,
+        slot_number: u8,
+        signature: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        if slot_number >= ATCA_ATECC_SLOTS_COUNT {
+            return AtcaStatus::AtcaInvalidId;
+        }
+        signature.resize(ATCA_SIG_SIZE, 0);
+        match mode {
+            // Executes Sign command, to sign a 32-byte external message using the
+            // private key in the specified slot. The message to be signed
+            // will be loaded into the Message Digest Buffer to the
+            // ATECC608A device or TempKey for other devices.
+            SignMode::External(hash) => AtcaStatus::from(unsafe {
+                let _guard = self
+                    .api_mutex
+                    .lock()
+                    .expect("Could not lock atcab API mutex");
+                cryptoauthlib_sys::atcab_sign(
+                    slot_number as u16,
+                    hash.as_ptr(),
+                    signature.as_mut_ptr(),
+                )
+            }),
+            _ => AtcaStatus::AtcaUnimplemented,
+        }
+    } // AteccDevice::sign_hash()
+
+    /// Request ATECC to verify ECDSA signature
+    pub fn verify_hash(
+        &self,
+        mode: VerifyMode,
+        hash: &[u8],
+        signature: &[u8],
+    ) -> Result<bool, AtcaStatus> {
+        if (signature.len() != ATCA_SIG_SIZE) | (hash.len() != ATCA_SHA2_256_DIGEST_SIZE) {
+            return Err(AtcaStatus::AtcaInvalidSize);
+        };
+        let mut is_verified: bool = false;
+        let mut _result = AtcaStatus::AtcaStatusUnknown;
+
+        match mode {
+            // Executes the Verify command, which verifies a signature (ECDSA
+            // verify operation) with a public key stored in the device. The
+            // message to be signed will be loaded into the Message Digest Buffer
+            // to the ATECC608A device or TempKey for other devices.
+            VerifyMode::Internal(slot_number) => {
+                if slot_number >= ATCA_ATECC_SLOTS_COUNT {
+                    return Err(AtcaStatus::AtcaInvalidId);
+                }
+                _result = AtcaStatus::from(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_verify_stored(
+                        hash.as_ptr(),
+                        signature.as_ptr(),
+                        slot_number as u16,
+                        &mut is_verified,
+                    )
+                })
+            }
+            // Executes the Verify command, which verifies a signature (ECDSA
+            // verify operation) with all components (message, signature, and
+            // public key) supplied. The message to be signed will be loaded into
+            // the Message Digest Buffer to the ATECC608A device or TempKey for
+            // other devices.
+            VerifyMode::External(public_key) => {
+                if public_key.len() != ATCA_ATECC_PUB_KEY_SIZE {
+                    return Err(AtcaStatus::AtcaInvalidId);
+                }
+                _result = AtcaStatus::from(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_verify_extern(
+                        hash.as_ptr(),
+                        signature.as_ptr(),
+                        public_key.as_ptr(),
+                        &mut is_verified,
+                    )
+                })
+            }
+            _ => return Err(AtcaStatus::AtcaUnimplemented),
+        }
+
+        match _result {
+            AtcaStatus::AtcaSuccess => Ok(is_verified),
+            _ => Err(_result),
+        }
+    } // AteccDevice::verify_hash()
+
     #[allow(deprecated)]
     pub fn get_device(&self) -> AtcaDevice {
         AtcaDevice {
@@ -496,6 +608,7 @@ impl AteccDevice {
     // Private functions
     // ---------------------------------------------------------------
 
+    /// Command accesses some static or dynamic information from the ATECC chip
     #[allow(dead_code)]
     fn info_cmd(&self, command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus> {
         let mut out_data: Vec<u8> = vec![0; 4];
@@ -516,8 +629,10 @@ impl AteccDevice {
             AtcaStatus::AtcaSuccess => Ok(out_data),
             _ => Err(result),
         }
-    }
+    } // AteccDevice::info_cmd()
 
+    /// A helper function for the gen_key() and import_key() methods,
+    /// pre-checking combinations of input parameters.
     fn check_input_parameters(&self, key_type: KeyType, slot_number: u8) -> Result<(), AtcaStatus> {
         if slot_number > ATCA_ATECC_SLOTS_COUNT {
             return Err(AtcaStatus::AtcaInvalidId);
@@ -532,6 +647,7 @@ impl AteccDevice {
         Ok(())
     } // AteccDevice::check_input_parameters()
 
+    /// A function that reads the configuration zone to check if the specified zone is locked
     fn is_locked(&self, zone: u8, is_locked: *mut bool) -> AtcaStatus {
         AtcaStatus::from(unsafe {
             let _guard = self
@@ -542,6 +658,7 @@ impl AteccDevice {
         })
     } // AteccDevice::is_locked()
 
+    /// A function that checks if the chip supports AES hardware encryption
     fn get_aes_status_from_chip(&self) -> Result<bool, AtcaStatus> {
         const LEN: u8 = 4;
         const OFFSET: u8 = 3;
@@ -571,6 +688,7 @@ impl AteccDevice {
         AtcaStatus::AtcaSuccess
     } // AteccDevice::get_config_from_chip()
 
+    /// Function returns size (in bytes) of the chip configuration data
     fn get_config_buffer_size(&self) -> usize {
         let device_type = self.get_device_type();
         match device_type {
@@ -581,6 +699,7 @@ impl AteccDevice {
         }
     } // AteccDevice::get_config_buffer_size()
 
+    /// Request ATECC to read 9 byte serial number of the device from the config zone
     fn read_serial_number(&self, number: &mut [u8; ATCA_SERIAL_NUM_SIZE]) -> AtcaStatus {
         AtcaStatus::from(unsafe {
             let _guard = self
@@ -591,6 +710,7 @@ impl AteccDevice {
         })
     } // AteccDevice::read_serial_number()
 
+    /// A generic function that reads data from the chip
     fn read_zone(
         &self,
         zone: u8,
@@ -612,6 +732,7 @@ impl AteccDevice {
         })
     } // AteccDevice::write_zone()
 
+    /// Generic function that writes data to the chip
     fn write_zone(
         &self,
         zone: u8,

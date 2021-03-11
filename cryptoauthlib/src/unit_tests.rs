@@ -126,8 +126,10 @@ fn random() {
 
     let mut rand_out = Vec::new();
     let device_random = device.random(&mut rand_out);
+    let sum: u16 = rand_out.iter().fold(0, |s, &x| s + x as u16);
 
     assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+    assert_ne!(sum, 0x0FF0); // Fail whenever the chip has no configuration locked
     assert_eq!(device.release().to_string(), "AtcaSuccess");
     assert_eq!(device_random.to_string(), "AtcaSuccess");
 }
@@ -265,6 +267,67 @@ fn import_key() {
     assert_eq!(pub_key_ok.to_string(), "AtcaSuccess");
     assert_eq!(pub_key_bad_1.to_string(), "AtcaInvalidSize");
     assert_eq!(pub_key_bad_2.to_string(), "AtcaInvalidId");
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+}
+
+#[test]
+#[serial]
+fn get_pubkey() {
+    let device = test_setup();
+    let mut public_key: Vec<u8> = Vec::new();
+
+    let result = device.get_public_key(0x00, &mut public_key);
+    let sum: u16 = public_key.iter().fold(0, |s, &x| s + x as u16);
+
+    assert_eq!(result.to_string(), "AtcaSuccess");
+    assert_eq!(public_key.len(), super::ATCA_ATECC_PUB_KEY_SIZE);
+    assert_ne!(sum, 0);
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+}
+
+#[test]
+#[serial]
+fn sign_verify_hash() {
+    let device = test_setup();
+
+    let hash: Vec<u8> = vec![0xA5; 32];
+    let internal_sig = super::SignEcdsaParam {
+        is_invalidate: false,
+        is_full_sn: false,
+    };
+    let internal_mac_verify = super::VerifyEcdsaParam::default();
+
+    let mut signature: Vec<u8> = Vec::new();
+    let mut public_key: Vec<u8> = Vec::new();
+    let mut is_verified: bool = false;
+
+    let mode_sign = super::SignMode::Internal(internal_sig);
+    let sign_internal = device.sign_hash(mode_sign, 0x00, &mut signature);
+    let mode_verify = super::VerifyMode::InternalMac(internal_mac_verify);
+    let mut verify_external_result = super::AtcaStatus::AtcaSuccess;
+    if let Err(err) = device.verify_hash(mode_verify, &hash.to_vec(), &signature) {
+        verify_external_result = err
+    };
+
+    let mode_sign = super::SignMode::External(hash.to_vec());
+    let sign_external = device.sign_hash(mode_sign, 0x00, &mut signature);
+    let get_pub_key_result = device.get_public_key(0x00, &mut public_key);
+    let mode_verify = super::VerifyMode::External(public_key);
+    let mut verify_internal_result = super::AtcaStatus::AtcaSuccess;
+    match device.verify_hash(mode_verify, &hash.to_vec(), &signature) {
+        Err(err) => verify_internal_result = err,
+        Ok(val) => is_verified = val,
+    };
+
+    assert_eq!(signature.len(), super::ATCA_SIG_SIZE);
+    assert_eq!(sign_internal.to_string(), "AtcaUnimplemented");
+    assert_eq!(verify_external_result.to_string(), "AtcaUnimplemented");
+
+    assert_eq!(sign_external.to_string(), "AtcaSuccess");
+    assert_eq!(get_pub_key_result.to_string(), "AtcaSuccess");
+    assert_eq!(verify_internal_result.to_string(), "AtcaSuccess");
+    assert_eq!(is_verified, true);
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 }
 
