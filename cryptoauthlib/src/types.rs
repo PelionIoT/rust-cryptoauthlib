@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate strum_macros; // 0.10.0
 
-/// An ATECC/ATSHA device buffer to load.
+/// An ATECC/ATSHA device buffer to load
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum NonceTarget {
@@ -10,6 +10,7 @@ pub enum NonceTarget {
     AltKeyBuf = 0x80,
 }
 
+/// Designates the source of the data to hash with TempKey for Generate Digest
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum GenDigZone {
@@ -17,6 +18,7 @@ pub enum GenDigZone {
     SharedNonce = 0x03,
 }
 
+/// Modes of calling the info_cmd() function
 #[allow(dead_code)]
 #[repr(u8)]
 enum InfoCmdType {
@@ -25,6 +27,56 @@ enum InfoCmdType {
     State = 0x02,
     Gpio = 0x03,
     VolKeyPermit = 0x04,
+}
+
+/// The mode of calling the ECDSA signature function
+pub enum SignMode {
+    /// The input parameter is hash to be signed
+    External(Vec<u8>),
+    Internal(SignEcdsaParam),
+}
+
+/// The mode of calling the ECDSA verification function
+pub enum VerifyMode {
+    /// The input parameter is public key
+    External(Vec<u8>),
+    ExternalMac(VerifyEcdsaParam),
+    /// The input parameter is slot number
+    Internal(u8),
+    InternalMac(VerifyEcdsaParam),
+}
+
+/// Detailed parameters of calling the ECDSA signature function
+pub struct SignEcdsaParam {
+    /// Set to true if the signature will be used with
+    /// the Verify(Invalidate) command. false for all other cases.
+    pub is_invalidate: bool,
+    /// Set to true if the message should incorporate
+    /// the device's full serial number.
+    pub is_full_sn: bool,
+}
+
+/// Detailed parameters of calling the ECDSA verification function
+pub struct VerifyEcdsaParam {
+    /// Public key for ExternalMac mode 
+    pub public_key: Option<Vec<u8>>,
+    /// Slot number for InternalMac mode
+    pub slot_number: Option<u8>,
+    /// System nonce (32 byte) used for the verification MAC
+    pub num_in: Vec<u8>,
+    /// IO protection key for verifying the validation MAC
+    pub io_key: u8,
+}
+
+impl Default for VerifyEcdsaParam {
+    fn default() -> VerifyEcdsaParam {
+        VerifyEcdsaParam {
+            public_key: None,
+            slot_number: None,
+            num_in: Vec::new(),
+            io_key: 0x00,
+        }
+    }
 }
 
 /// An ATECC slot
