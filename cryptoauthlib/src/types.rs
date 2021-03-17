@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate strum_macros; // 0.10.0
-
 /// An ATECC/ATSHA device buffer to load
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -290,13 +287,13 @@ pub enum KeyType {
 /// ATECC interface configuration
 pub struct AtcaIfaceCfg {
     /// ATECC interface type
-    pub iface_type: AtcaIfaceType,
+    iface_type: AtcaIfaceType,
     /// ATECC device type
-    pub devtype: AtcaDeviceType,
+    devtype: AtcaDeviceType,
     /// ATECC interface details (contents depend on interface type)
-    pub iface: AtcaIface,
-    pub wake_delay: u16,
-    pub rx_retries: i32,
+    iface: Option<AtcaIface>,
+    wake_delay: u16,
+    rx_retries: i32,
 } // pub struct AtcaIfaceCfg
 
 /// ATECC interface
@@ -312,15 +309,15 @@ pub union AtcaIface {
 #[derive(Copy, Clone)]
 pub struct AtcaIfaceI2c {
     /// ATECC I2C bus address
-    pub slave_address: u8,
+    slave_address: u8,
     /// ATECC I2C bus number
-    pub bus: u8,
+    bus: u8,
     /// ATECC I2C bus baud rate
-    pub baud: u32,
+    baud: u32,
 } // pub struct AtcaIfaceI2c
 
 /// Supported ATECC interfaces
-#[derive(Copy, Clone, Display)]
+#[derive(PartialEq, Copy, Clone, Display)]
 pub enum AtcaIfaceType {
     AtcaI2cIface,
     AtcaSwiIface,
@@ -328,6 +325,7 @@ pub enum AtcaIfaceType {
     AtcaSpiIface,
     AtcaHidIface,
     AtcaCustomIface,
+    AtcaTestIface,
     AtcaUnknownIface,
 } // pub enum AtcaIfaceType
 
@@ -339,11 +337,13 @@ pub enum AtcaDeviceType {
     ATECC508A,
     ATECC608A,
     ATSHA206A,
+    AtcaTestDevFail,
+    AtcaTestDevSuccess,
     AtcaDevUnknown,
 } // pub enum AtcaDeviceType
 
 /// Return status for device accessing functions
-#[derive(Debug,Display,PartialEq)]
+#[derive(Debug,Copy,Clone,Display,PartialEq)]
 pub enum AtcaStatus {
     /// Function succeeded.
     AtcaSuccess,

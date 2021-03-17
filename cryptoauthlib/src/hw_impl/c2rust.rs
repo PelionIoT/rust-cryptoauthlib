@@ -1,4 +1,4 @@
-use super::AtcaStatus;
+use super::{AtcaDeviceType, AtcaStatus};
 use std::convert::From;
 
 impl From<cryptoauthlib_sys::ATCA_STATUS> for AtcaStatus {
@@ -60,15 +60,15 @@ impl From<cryptoauthlib_sys::ATCA_STATUS> for AtcaStatus {
     }
 }
 
-impl From<cryptoauthlib_sys::ATCADeviceType> for super::AtcaDeviceType {
+impl From<cryptoauthlib_sys::ATCADeviceType> for AtcaDeviceType {
     fn from(device_type: cryptoauthlib_sys::ATCADeviceType) -> Self {
         match device_type {
-            cryptoauthlib_sys::ATCADeviceType_ATSHA204A => super::AtcaDeviceType::ATSHA204A,
-            cryptoauthlib_sys::ATCADeviceType_ATECC108A => super::AtcaDeviceType::ATECC108A,
-            cryptoauthlib_sys::ATCADeviceType_ATECC508A => super::AtcaDeviceType::ATECC508A,
-            cryptoauthlib_sys::ATCADeviceType_ATECC608A => super::AtcaDeviceType::ATECC608A,
-            cryptoauthlib_sys::ATCADeviceType_ATSHA206A => super::AtcaDeviceType::ATSHA206A,
-            _ => super::AtcaDeviceType::AtcaDevUnknown,
+            cryptoauthlib_sys::ATCADeviceType_ATSHA204A => AtcaDeviceType::ATSHA204A,
+            cryptoauthlib_sys::ATCADeviceType_ATECC108A => AtcaDeviceType::ATECC108A,
+            cryptoauthlib_sys::ATCADeviceType_ATECC508A => AtcaDeviceType::ATECC508A,
+            cryptoauthlib_sys::ATCADeviceType_ATECC608A => AtcaDeviceType::ATECC608A,
+            cryptoauthlib_sys::ATCADeviceType_ATSHA206A => AtcaDeviceType::ATSHA206A,
+            _ => AtcaDeviceType::AtcaDevUnknown,
         }
     }
 }

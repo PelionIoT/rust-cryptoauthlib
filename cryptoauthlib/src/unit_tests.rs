@@ -2,19 +2,20 @@ use serde::Deserialize;
 use serial_test::serial;
 use std::fs::read_to_string;
 use std::path::Path;
+mod atca_iface_cfg;
 
 #[derive(Deserialize)]
 struct Config {
     pub device: Device,
-    pub interface: Interface,
+    pub interface: Option<Interface>,
 }
 
 #[derive(Deserialize)]
 struct Device {
     pub device_type: String,
     pub iface_type: String,
-    pub wake_delay: u16,
-    pub rx_retries: i32,
+    pub wake_delay: Option<u16>,
+    pub rx_retries: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -40,25 +41,39 @@ fn is_chip_version_608(device: &super::AteccDevice) -> Result<bool, super::AtcaS
     }
 }
 
-fn iface_setup() -> Result<super::AtcaIfaceCfg, String> {
-    let config_path = Path::new("config.toml");
+fn iface_setup(config_file: String) -> Result<super::AtcaIfaceCfg, String> {
+    let config_path = Path::new(config_file);
     let config_string = read_to_string(config_path).expect("file not found");
     let config: Config = toml::from_str(&config_string).unwrap();
+    let mut iface_cfg = super::AtcaIfaceCfg::default();
+
     match config.device.iface_type.as_str() {
-        "i2c" => super::atca_iface_setup_i2c(
-            config.device.device_type,
-            config.device.wake_delay,
-            config.device.rx_retries,
-            Some(config.interface.slave_address),
-            Some(config.interface.bus),
-            Some(config.interface.baud),
+        "i2c" => {
+            let mut iface = super::AtcaIface::default();
+            let mut atcai2c = super::AtcaIfaceI2c::default();
+            iface_cfg
+                .set_iface_type("i2c")
+                .set_devtype(config.device.device_type)
+                .set_wake_delay(config.device.wake_delay)
+                .set_rx_retries(config.device.rx_retries)
+                .set_iface(
+                    iface.set_atcai2c(
+                        atcai2c
+                            .set_slave_address(config.interface.slave_address)
+                            .set_bus(config.interface.bus)
+                            .set_baud(config.interface.baud)
+                    )
+                )
         ),
+        "test-interface" => iface_cfg
+                .set_iface_type("test-interface")
+                .set_devtype(config.device.device_type.as_str()),
         _ => Err("unsupported interface type".to_owned()),
     }
 }
 
 fn test_setup() -> super::AteccDevice {
-    let result = iface_setup();
+    let result = iface_setup("config.toml");
     assert_eq!(result.is_ok(), true);
 
     let iface_cfg = result.unwrap();
@@ -70,7 +85,7 @@ fn test_setup() -> super::AteccDevice {
 }
 
 // test_teardown() is not needed, it is one-liner and if that fails, then
-// there is a large problem - elsewhere...
+// there is a larger problem - elsewhere...
 
 #[test]
 #[serial]
