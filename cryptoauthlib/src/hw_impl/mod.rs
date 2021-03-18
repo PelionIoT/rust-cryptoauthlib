@@ -3,14 +3,12 @@ use std::ptr;
 use std::sync::Mutex;
 
 // Only temporarily!
-#[allow(unused_imports,deprecated)]
+#[allow(unused_imports)]
 use super::{AtcaIfaceCfg, AtcaIface, AtcaIfaceI2c, AtcaStatus, AtcaDeviceType, AtcaIfaceType, AtcaIfaceCfgPtrWrapper, AtcaSlot, KeyType, NonceTarget, 
-    SignEcdsaParam, VerifyEcdsaParam, SignMode, VerifyMode, InfoCmdType, WriteConfig, AtcaDevice, ReadKey, EccKeyAttr, SlotConfig};
+    SignEcdsaParam, VerifyEcdsaParam, SignMode, VerifyMode, InfoCmdType, WriteConfig, ReadKey, EccKeyAttr, SlotConfig};
 use super::{ATCA_ZONE_CONFIG, ATCA_SERIAL_NUM_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_RANDOM_BUFFER_SIZE, ATCA_NONCE_NUMIN_SIZE, ATCA_ATECC_PUB_KEY_SIZE,
     ATCA_SIG_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_TEMPKEY_KEYID, ATCA_AES_KEY_SIZE, ATCA_BLOCK_SIZE, ATCA_ZONE_DATA, ATCA_ATECC_PRIV_KEY_SIZE,
     ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY, ATCA_SHA2_256_DIGEST_SIZE, ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA, ATCA_ATSHA_CONFIG_BUFFER_SIZE};
-
-//use crate::AteccDevice;
 
 mod c2rust;
 mod rust2c;
@@ -73,7 +71,7 @@ impl Default for AteccDevice {
     }
 }
 
-impl super::AteccDevice for AteccDevice {
+impl super::AteccDeviceTrait for AteccDevice {
     /// Trait implementationRequest ATECC to generate a vector of random bytes
     /// Trait implementation
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
@@ -492,6 +490,50 @@ impl super::AteccDevice for AteccDevice {
         AtcaStatus::AtcaSuccess
     } // AteccDevice::get_config()
 
+    /// A generic function that reads data from the chip
+    fn read_zone(
+        &self,
+        zone: u8,
+        slot: u16,
+        block: u8,
+        offset: u8,
+        data: &mut Vec<u8>,
+        len: u8,
+    ) -> AtcaStatus {
+        self.read_zone(zone, slot, block, offset, data, len)
+    }
+
+    /// Command accesses some static or dynamic information from the ATECC chip
+    #[allow(dead_code)]
+    fn info_cmd(&self, command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus> {
+        let mut out_data: Vec<u8> = vec![0; 4];
+        let param2 = 0;
+        match command {
+            InfoCmdType::Revision => (),
+            InfoCmdType::State => (),
+            _ => return Err(AtcaStatus::AtcaUnimplemented),
+        }
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_info_base(command as u8, param2, out_data.as_mut_ptr())
+        });
+        match result {
+            AtcaStatus::AtcaSuccess => Ok(out_data),
+            _ => Err(result),
+        }
+    } // AteccDevice::info_cmd()
+
+    fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
+        self.serial_number
+    }
+
+    fn is_aes_enabled(&self) -> bool {
+        self.aes_enabled
+    }
+
     /// ATECC device instance destructor
     /// Trait implementation
     fn release(&self) -> AtcaStatus {
@@ -627,46 +669,10 @@ impl AteccDevice {
             cryptoauthlib_sys::atcab_release()
         })
     } // AteccDevice::release()
-    
-    #[allow(deprecated,unused)]
-    pub fn get_device(&self) -> AtcaDevice {
-        AtcaDevice {
-            dev: unsafe {
-                let _guard = self
-                    .api_mutex
-                    .lock()
-                    .expect("Could not lock atcab API mutex");
-                cryptoauthlib_sys::atcab_get_device()
-            },
-        }
-    } // AteccDevice::get_device()
 
     // ---------------------------------------------------------------
     // Private functions
     // ---------------------------------------------------------------
-
-    /// Command accesses some static or dynamic information from the ATECC chip
-    #[allow(dead_code)]
-    fn info_cmd(&self, command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus> {
-        let mut out_data: Vec<u8> = vec![0; 4];
-        let param2 = 0;
-        match command {
-            InfoCmdType::Revision => (),
-            InfoCmdType::State => (),
-            _ => return Err(AtcaStatus::AtcaUnimplemented),
-        }
-        let result = AtcaStatus::from(unsafe {
-            let _guard = self
-                .api_mutex
-                .lock()
-                .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_info_base(command as u8, param2, out_data.as_mut_ptr())
-        });
-        match result {
-            AtcaStatus::AtcaSuccess => Ok(out_data),
-            _ => Err(result),
-        }
-    } // AteccDevice::info_cmd()
 
     /// A helper function for the gen_key() and import_key() methods,
     /// pre-checking combinations of input parameters.
@@ -767,7 +773,7 @@ impl AteccDevice {
                 .expect("Could not lock atcab API mutex");
             cryptoauthlib_sys::atcab_read_zone(zone, slot, block, offset, data.as_mut_ptr(), len)
         })
-    } // AteccDevice::write_zone()
+    } // AteccDevice::read_zone()
 
     /// Generic function that writes data to the chip
     fn write_zone(
@@ -824,7 +830,7 @@ fn atcab_get_key_type(data: u8) -> KeyType {
     }
 }
 
-fn atcab_get_config_from_config_zone(config_data: &[u8], atca_slots: &mut Vec<AtcaSlot>) {
+pub fn atcab_get_config_from_config_zone(config_data: &[u8], atca_slots: &mut Vec<AtcaSlot>) {
     const IDX_SLOT_LOCKED: usize = 88;
     const IDX_SLOT_CONFIG: usize = 20;
     const IDX_KEY_CONFIG: usize = 96;

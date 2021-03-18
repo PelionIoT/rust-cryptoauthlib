@@ -18,7 +18,7 @@ pub enum GenDigZone {
 /// Modes of calling the info_cmd() function
 #[allow(dead_code)]
 #[repr(u8)]
-enum InfoCmdType {
+pub enum InfoCmdType {
     Revision = 0x00,
     KeyValid = 0x01,
     State = 0x02,
@@ -86,6 +86,12 @@ pub struct AtcaSlot {
     pub is_locked: bool,
     /// Slot configuration as can be read from configuration zone
     pub config: SlotConfig,
+}
+
+impl Default for AtcaSlot {
+    fn default() -> AtcaSlot {
+        unsafe { std::mem::zeroed() }
+    }
 }
 
 /// Detailed ATECC key slot configuration
@@ -290,13 +296,15 @@ pub struct AtcaIfaceCfg {
     iface_type: AtcaIfaceType,
     /// ATECC device type
     devtype: AtcaDeviceType,
-    /// ATECC interface details (contents depend on interface type)
+    /// ATECC interface details (contents depend on interface type).
+    /// Not needed at all for "test-interface"
     iface: Option<AtcaIface>,
     wake_delay: u16,
     rx_retries: i32,
 } // pub struct AtcaIfaceCfg
 
 /// ATECC interface
+// Only one can be instantiated at a time
 pub union AtcaIface {
     /// ATECC I2C interface settings
     pub atcai2c: AtcaIfaceI2c,
@@ -343,7 +351,7 @@ pub enum AtcaDeviceType {
 } // pub enum AtcaDeviceType
 
 /// Return status for device accessing functions
-#[derive(Debug,Copy,Clone,Display,PartialEq)]
+#[derive(Debug, Copy, Clone, Display, PartialEq)]
 pub enum AtcaStatus {
     /// Function succeeded.
     AtcaSuccess,
@@ -420,20 +428,6 @@ pub enum AtcaStatus {
     /// Unknown error occured
     AtcaUnknown,
 } // pub enum AtcaStatus
-
-/// The Rust box for C object backing ATCADevice
-#[derive(Debug,Clone)]
-// supress "warning: field is never read: `dev`"
-#[allow(dead_code)]
-#[deprecated]
-pub struct AtcaDevice {
-    dev: cryptoauthlib_sys::ATCADevice,
-}
-
-#[allow(deprecated)]
-unsafe impl Send for AtcaDevice {}
-#[allow(deprecated)]
-unsafe impl Sync for AtcaDevice {}
 
 #[derive(Debug)]
 struct AtcaIfaceCfgPtrWrapper {

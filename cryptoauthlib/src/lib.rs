@@ -9,8 +9,10 @@ include!("constants.rs");
 mod hw_impl;
 mod sw_impl;
 mod atca_iface_cfg;
+#[cfg(test)]
+mod unit_tests;
 
-pub trait AteccDevice {
+pub trait AteccDeviceTrait {
     /// Request ATECC to generate a vector of random bytes
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to compute a message hash (SHA256)
@@ -52,11 +54,29 @@ pub trait AteccDevice {
     /// Returns a structure containing configuration data read from ATECC
     /// during initialization of the AteccDevice object.
     fn get_config(&self, atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus;
+    /// A generic function that reads data from the chip
+    fn read_zone(
+        &self,
+        zone: u8,
+        slot: u16,
+        block: u8,
+        offset: u8,
+        data: &mut Vec<u8>,
+        len: u8,
+    ) -> AtcaStatus;
+    /// Command accesses some static or dynamic information from the ATECC chip
+    fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus>;
+    /// Get serial number of the ATECC device
+    fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE];
+    /// 
+    fn is_aes_enabled(&self) -> bool;
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus;
 }
 
-pub fn create_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<Box<dyn AteccDevice>, String> {
+pub type AteccDevice = Box<dyn AteccDeviceTrait>;
+
+pub fn create_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
     match r_iface_cfg.devtype {
         AtcaDeviceType::AtcaTestDevSuccess 
         | AtcaDeviceType::AtcaTestDevFail => match sw_impl::AteccDevice::new(r_iface_cfg) {
@@ -70,50 +90,3 @@ pub fn create_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<Box<dyn AteccDev
         },
     }
 }
-
-// Setup an ATECC interface configuration (AtcaIfaceCfg)
-// based on a device type and I2C parameters.
-// This is a helper function, created for I2C exclusively.
-// pub fn atca_iface_setup_i2c(
-//     device_type: String,
-//     wake_delay: u16,
-//     rx_retries: i32,
-//     // I2C salve address
-//     slave_address: Option<u8>,
-//     // I2C bus number
-//     bus: Option<u8>,
-//     // I2C baud rate
-//     baud: Option<u32>,
-// ) -> Result<AtcaIfaceCfg, String> {
-//     let atca_iface_cfg = AtcaIfaceCfg {
-//         iface_type: AtcaIfaceType::AtcaI2cIface,
-//         devtype: match device_type.as_str() {
-//             "atecc608a" => AtcaDeviceType::ATECC608A,
-//             "atecc508a" => AtcaDeviceType::ATECC508A,
-//             _ => {
-//                 let e = "Unsupported device type ".to_owned() + device_type.as_str();
-//                 return Err(e);
-//             }
-//         },
-//         iface: AtcaIface {
-//             atcai2c: AtcaIfaceI2c {
-//                 // unwrap_or_else_return()?
-//                 slave_address: match slave_address {
-//                     Some(x) => x,
-//                     _ => return Err("missing i2c slave address".to_owned()),
-//                 },
-//                 bus: match bus {
-//                     Some(x) => x,
-//                     _ => return Err("missing i2c bus".to_owned()),
-//                 },
-//                 baud: match baud {
-//                     Some(x) => x,
-//                     _ => return Err("missing i2c baud rate".to_owned()),
-//                 },
-//             },
-//         },
-//         rx_retries,
-//         wake_delay,
-//     };
-//     Ok(atca_iface_cfg)
-// }

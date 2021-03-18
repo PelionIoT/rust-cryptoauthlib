@@ -2,8 +2,8 @@ use rand::{distributions::Standard, Rng};
 // Only temporarily!
 #[allow(unused_imports,deprecated)]
 use super::{AtcaIfaceCfg, AtcaIface, AtcaIfaceI2c, AtcaStatus, AtcaDeviceType, AtcaIfaceType, AtcaIfaceCfgPtrWrapper, AtcaSlot, KeyType, NonceTarget, 
-    SignEcdsaParam, VerifyEcdsaParam, SignMode, VerifyMode, InfoCmdType, WriteConfig, AtcaDevice, ReadKey, EccKeyAttr, SlotConfig};
-use super::ATCA_RANDOM_BUFFER_SIZE;
+    SignEcdsaParam, VerifyEcdsaParam, SignMode, VerifyMode, InfoCmdType, WriteConfig, ReadKey, EccKeyAttr, SlotConfig};
+use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 
 pub struct AteccDevice {
     result: AtcaStatus,
@@ -17,10 +17,11 @@ impl Default for AteccDevice {
     }
 }
 
-impl super::AteccDevice for AteccDevice {
+impl super::AteccDeviceTrait for AteccDevice {
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
-        let result :Vec<u8> = rand::thread_rng().sample_iter(Standard).take(ATCA_RANDOM_BUFFER_SIZE).collect();
-        rand_out.copy_from_slice(&result);
+        let vector: Vec<u8> = rand::thread_rng().sample_iter(Standard).take(ATCA_RANDOM_BUFFER_SIZE).collect();
+        rand_out.resize(ATCA_RANDOM_BUFFER_SIZE, 0u8);
+        rand_out.copy_from_slice(&vector);
         self.result
     }
     /// Request ATECC to compute a message hash (SHA256)
@@ -102,6 +103,47 @@ impl super::AteccDevice for AteccDevice {
     fn get_config(&self, _atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus {
         self.result
     }
+
+    /// A generic function that reads data from the chip
+    fn read_zone(
+        &self,
+        _zone: u8,
+        _slot: u16,
+        _block: u8,
+        _offset: u8,
+        data: &mut Vec<u8>,
+        _len: u8,
+    ) -> AtcaStatus {
+        data.clear();
+        self.result
+    }
+    /// Command accesses some static or dynamic information from the ATECC chip
+    fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus> {
+        match self.result {
+            AtcaStatus::AtcaSuccess => Ok(Vec::new()),
+            _ => Err(self.result),
+        }
+    }
+
+    fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
+        let mut serial_number = [0; ATCA_SERIAL_NUM_SIZE];
+        match self.result {
+            AtcaStatus::AtcaSuccess => {
+                serial_number[0] = 0x01;
+                serial_number[1] = 0x23;
+            },
+            _ => (),
+        }
+        serial_number
+    }
+    
+    fn is_aes_enabled(&self) -> bool {
+        match self.result {
+            AtcaStatus::AtcaSuccess => true,
+            _ => false,
+        }
+    }
+
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus {
         self.result
