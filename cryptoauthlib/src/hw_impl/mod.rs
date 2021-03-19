@@ -563,7 +563,7 @@ impl AteccDevice {
         // From now on iface_cfg is consumed and iface_cfg_ptr must be stored to be released
         // when no longer needed.
 
-        let init_status = AtcaStatus::from(unsafe {
+        let err = AtcaStatus::from(unsafe {
             let _guard = atecc_device
                 .api_mutex
                 .lock()
@@ -571,7 +571,7 @@ impl AteccDevice {
             cryptoauthlib_sys::atcab_init(iface_cfg_raw_ptr)
         });
 
-        atecc_device.iface_cfg_ptr = match init_status {
+        atecc_device.iface_cfg_ptr = match err {
             AtcaStatus::AtcaSuccess => AtcaIfaceCfgPtrWrapper {
                 ptr: iface_cfg_raw_ptr,
             },
@@ -579,7 +579,7 @@ impl AteccDevice {
                 // Here init failed so no need to call a proper release
                 ATECC_RESOURCE_MANAGER.lock().unwrap().release();
                 unsafe { Box::from_raw(iface_cfg_raw_ptr) };
-                return Err(init_status.to_string());
+                return Err(err.to_string());
             }
         };
 
@@ -593,7 +593,7 @@ impl AteccDevice {
                 AtcaStatus::AtcaSuccess => number,
                 _ => {
                     atecc_device.release();
-                    return Err(init_status.to_string());
+                    return Err(err.to_string());
                 }
             }
         };
