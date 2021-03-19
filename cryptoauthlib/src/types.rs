@@ -291,6 +291,7 @@ pub enum KeyType {
 }
 
 /// ATECC interface configuration
+#[derive(Copy, Clone)]
 pub struct AtcaIfaceCfg {
     /// ATECC interface type
     iface_type: AtcaIfaceType,
@@ -305,6 +306,7 @@ pub struct AtcaIfaceCfg {
 
 /// ATECC interface
 // Only one can be instantiated at a time
+#[derive(Copy, Clone)]
 pub union AtcaIface {
     /// ATECC I2C interface settings
     pub atcai2c: AtcaIfaceI2c,
@@ -338,7 +340,7 @@ pub enum AtcaIfaceType {
 } // pub enum AtcaIfaceType
 
 /// ATECC/ATSHA device types supported by CryptoAuth library
-#[derive(PartialEq, Debug, Display)]
+#[derive(PartialEq, Debug, Display, Copy, Clone)]
 pub enum AtcaDeviceType {
     ATSHA204A,
     ATECC108A,

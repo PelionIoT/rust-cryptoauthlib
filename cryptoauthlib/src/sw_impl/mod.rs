@@ -65,10 +65,11 @@ impl super::AteccDeviceTrait for AteccDevice {
         }
     }
     /// Request ATECC to return own device type
-    fn get_device_type(&self) -> AtcaDeviceType {
+    fn get_device_type(&self) -> Option<AtcaDeviceType> {
         match self.result {
-            AtcaStatus::AtcaSuccess => AtcaDeviceType::AtcaTestDevSuccess,
-            _ => AtcaDeviceType::AtcaTestDevFail,
+            AtcaStatus::AtcaSuccess => Some(AtcaDeviceType::AtcaTestDevSuccess),
+            AtcaStatus::AtcaFuncFail => Some(AtcaDeviceType::AtcaTestDevFail),
+            _ => None,
         }
     }
     /// Request ATECC to check if its configuration is locked.

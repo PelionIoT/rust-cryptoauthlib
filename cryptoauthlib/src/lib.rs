@@ -37,7 +37,7 @@ pub trait AteccDeviceTrait {
     /// Request ATECC to verify ECDSA signature
     fn verify_hash(&self, mode: VerifyMode, hash: &[u8], signature: &[u8]) -> Result<bool, AtcaStatus>;
     /// Request ATECC to return own device type
-    fn get_device_type(&self) -> AtcaDeviceType;
+    fn get_device_type(&self) -> Option<AtcaDeviceType>;
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
     fn configuration_is_locked(&self) -> Result<bool, AtcaStatus>;
@@ -74,9 +74,9 @@ pub trait AteccDeviceTrait {
     fn release(&self) -> AtcaStatus;
 }
 
-pub type AteccDevice = Box<dyn AteccDeviceTrait>;
+pub type AteccDevice = Box<dyn AteccDeviceTrait + Send + Sync>;
 
-pub fn create_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
+pub fn setup_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
     match r_iface_cfg.devtype {
         AtcaDeviceType::AtcaTestDevSuccess 
         | AtcaDeviceType::AtcaTestDevFail => match sw_impl::AteccDevice::new(r_iface_cfg) {

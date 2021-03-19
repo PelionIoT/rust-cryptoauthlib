@@ -114,7 +114,7 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// all other devices, only TempKey (32 bytes) is available.
     /// Trait implementation
     fn nonce(&self, target: super::NonceTarget, data: &[u8]) -> AtcaStatus {
-        if (self.get_device_type() != AtcaDeviceType::ATECC608A)
+        if (self.get_device_type() != Some(AtcaDeviceType::ATECC608A))
             & (target != super::NonceTarget::TempKey)
             & (data.len() != super::ATCA_NONCE_SIZE)
         {
@@ -426,7 +426,7 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     /// Request ATECC to return own device type
     /// Trait implementation
-    fn get_device_type(&self) -> AtcaDeviceType {
+    fn get_device_type(&self) -> Option<AtcaDeviceType> {
         self.get_device_type()
     } // AteccDevice::get_device_type()
 
@@ -622,14 +622,14 @@ impl AteccDevice {
     } // AteccDevice::new()
 
     /// Request ATECC to return own device type
-    fn get_device_type(&self) -> AtcaDeviceType {
-        AtcaDeviceType::from(unsafe {
+    fn get_device_type(&self) -> Option<AtcaDeviceType> {
+        Some(AtcaDeviceType::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
             cryptoauthlib_sys::atcab_get_device_type()
-        })
+        }))
     } // AteccDevice::get_device_type()
 
     /// Request ATECC to read and return own configuration zone.
@@ -735,7 +735,9 @@ impl AteccDevice {
     fn get_config_buffer_size(&self) -> usize {
         let device_type = self.get_device_type();
         match device_type {
-            AtcaDeviceType::ATECC508A | AtcaDeviceType::ATECC608A | AtcaDeviceType::ATECC108A => {
+            Some(AtcaDeviceType::ATECC508A)
+            | Some(AtcaDeviceType::ATECC608A)
+            | Some(AtcaDeviceType::ATECC108A) => {
                 ATCA_ATECC_CONFIG_BUFFER_SIZE
             }
             _ => ATCA_ATSHA_CONFIG_BUFFER_SIZE,

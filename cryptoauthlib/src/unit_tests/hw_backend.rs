@@ -48,21 +48,20 @@ fn iface_setup(config_file: String) -> Result<super::AtcaIfaceCfg, String> {
 
     match config.device.iface_type.as_str() {
         "i2c" => {
-            let iface = super::AtcaIface::default();
-            let atcai2c = super::AtcaIfaceI2c::default();
             Ok(iface_cfg
                 .set_iface_type("i2c".to_owned())
                 .set_devtype(config.device.device_type)
                 .set_wake_delay(config.device.wake_delay.unwrap())
                 .set_rx_retries(config.device.rx_retries.unwrap())
                 .set_iface(
-                    iface.set_atcai2c(
-                        atcai2c
-                            .set_slave_address(config.interface.unwrap().slave_address)
-                            .set_bus(config.interface.unwrap().bus)
-                            .set_baud(config.interface.unwrap().baud)
+                    super::AtcaIface::default()
+                        .set_atcai2c(
+                            super::AtcaIfaceI2c::default()
+                                .set_slave_address(config.interface.unwrap().slave_address)
+                                .set_bus(config.interface.unwrap().bus)
+                                .set_baud(config.interface.unwrap().baud)
+                        )
                     )
-                )
             )
         },
         "test-interface" => {
@@ -75,14 +74,14 @@ fn iface_setup(config_file: String) -> Result<super::AtcaIfaceCfg, String> {
     }
 }
 
-fn hardware_test_setup() -> super::AteccDevice {
+pub fn test_setup() -> super::AteccDevice {
     let result_iface_cfg = iface_setup("config.toml".to_owned());
     assert_eq!(result_iface_cfg.is_ok(), true);
 
     let iface_cfg = result_iface_cfg.unwrap();
     assert_eq!(iface_cfg.iface_type.to_string(), "AtcaI2cIface");
 
-    let result = super::create_atecc_device(iface_cfg);
+    let result = super::setup_atecc_device(iface_cfg);
     assert_eq!(result.is_ok(), true);
     result.unwrap()
 }
@@ -94,7 +93,7 @@ fn hardware_test_setup() -> super::AteccDevice {
 #[serial]
 fn new() {
     const SLOTS_COUNT: usize = super::ATCA_ATECC_SLOTS_COUNT as usize;
-    let device = hardware_test_setup();
+    let device = test_setup();
     let mut aes_should_be_enabled = false;
     let mut call_result = super::AtcaStatus::AtcaSuccess;
 
@@ -126,7 +125,7 @@ fn new() {
 #[test]
 #[serial]
 fn sha() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let test_message = "TestMessage";
     let test_message_hash = [
@@ -142,26 +141,10 @@ fn sha() {
     assert_eq!(digest, test_message_hash);
 }
 
-#[cfg(features="hardware-backend")]
-#[test]
-#[serial]
-fn hw_random() {
-    let device = hardware_test_setup();
-
-    let mut rand_out = Vec::new();
-    let device_random = device.random(&mut rand_out);
-    let sum: u16 = rand_out.iter().fold(0, |s, &x| s + x as u16);
-
-    assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
-    assert_ne!(sum, 0x0FF0); // Fail whenever the chip has no configuration locked
-    assert_eq!(device.release().to_string(), "AtcaSuccess");
-    assert_eq!(device_random.to_string(), "AtcaSuccess");
-}
-
 #[test]
 #[serial]
 fn nonce() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let nonce_64 = [
         0x41, 0xDA, 0xC9, 0xA1, 0x4B, 0x4F, 0xAE, 0xAE, 0x7D, 0xD5, 0x97, 0xD2, 0xA6, 0x78, 0x81,
@@ -200,7 +183,7 @@ fn nonce() {
 #[test]
 #[serial]
 fn nonce_rand() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let nonce = [
         0x41, 0xDA, 0xC9, 0xA1, 0x4B, 0x4F, 0xAE, 0xAE, 0x7D, 0xD5, 0x97, 0xD2, 0xA6, 0x78, 0x81,
@@ -221,7 +204,7 @@ fn nonce_rand() {
 #[test]
 #[serial]
 fn gen_key() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let mut check_ver_result: super::AtcaStatus = super::AtcaStatus::AtcaSuccess;
     let mut expected: super::AtcaStatus = super::AtcaStatus::AtcaBadParam;
@@ -255,7 +238,7 @@ fn gen_key() {
 #[test]
 #[serial]
 fn import_key() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let priv_key = [
         0xF5, 0xDB, 0x6B, 0xA1, 0x82, 0x22, 0xCE, 0xC1, 0x54, 0x53, 0xE5, 0x63, 0xDE, 0xC5, 0xC7,
@@ -297,7 +280,7 @@ fn import_key() {
 #[test]
 #[serial]
 fn get_pubkey() {
-    let device = hardware_test_setup();
+    let device = test_setup();
     let mut public_key: Vec<u8> = Vec::new();
 
     let result = device.get_public_key(0x00, &mut public_key);
@@ -312,7 +295,7 @@ fn get_pubkey() {
 #[test]
 #[serial]
 fn sign_verify_hash() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let hash: Vec<u8> = vec![0xA5; 32];
     let internal_sig = super::SignEcdsaParam {
@@ -357,31 +340,8 @@ fn sign_verify_hash() {
 
 #[test]
 #[serial]
-fn read_config_zone() {
-    let device = hardware_test_setup();
-
-    let mut config_data = Vec::new();
-    let device_read_config_zone = device.read_config_zone(&mut config_data);
-    let device_get_device_type = device.get_device_type();
-
-    assert_eq!(device.release().to_string(), "AtcaSuccess");
-    assert_eq!(device_read_config_zone.to_string(), "AtcaSuccess");
-    match device_get_device_type {
-        super::AtcaDeviceType::ATECC508A
-        | super::AtcaDeviceType::ATECC608A
-        | super::AtcaDeviceType::ATECC108A => {
-            assert_eq!(config_data.len(), super::ATCA_ATECC_CONFIG_BUFFER_SIZE);
-            assert_eq!(config_data[0], 0x01);
-            assert_eq!(config_data[1], 0x23);
-        }
-        _ => panic!("Unknown device type."),
-    };
-}
-
-#[test]
-#[serial]
 fn cmp_config_zone() {
-    let device = hardware_test_setup();
+    let device = test_setup();
 
     let mut config_data = Vec::new();
     let device_read_config_zone = device.read_config_zone(&mut config_data);
@@ -397,7 +357,7 @@ fn cmp_config_zone() {
 #[test]
 #[serial]
 fn configuration_is_locked() {
-    let device = hardware_test_setup();
+    let device = test_setup();
     let mut is_locked = false;
     let mut is_locked_check_result = super::AtcaStatus::AtcaSuccess;
 
@@ -414,7 +374,7 @@ fn configuration_is_locked() {
 #[test]
 #[serial]
 fn data_zone_is_locked() {
-    let device = hardware_test_setup();
+    let device = test_setup();
     let mut is_locked = false;
     let mut is_locked_check_result = super::AtcaStatus::AtcaSuccess;
 
@@ -432,7 +392,7 @@ fn data_zone_is_locked() {
 #[serial]
 fn get_config_from_config_zone() {
     let mut config_data = Vec::new();
-    let device = hardware_test_setup();
+    let device = test_setup();
     let device_atcab_read_config_zone = device.read_config_zone(&mut config_data);
 
     config_data[88] = 0b10111111;
@@ -457,7 +417,7 @@ fn get_config_from_config_zone() {
 #[test]
 #[serial]
 fn get_config() {
-    let device = hardware_test_setup();
+    let device = test_setup();
     let mut slots: Vec<super::AtcaSlot> = Vec::new();
     let get_config = device.get_config(&mut slots);
     assert_eq!(device.release().to_string(), "AtcaSuccess");
@@ -468,7 +428,7 @@ fn get_config() {
 #[test]
 #[serial]
 fn info_cmd() {
-    let device = hardware_test_setup();
+    let device = test_setup();
     let mut result_key_valid = super::AtcaStatus::AtcaSuccess;
     let mut result_revision = super::AtcaStatus::AtcaSuccess;
     let mut revision: Vec<u8> = Vec::new();
