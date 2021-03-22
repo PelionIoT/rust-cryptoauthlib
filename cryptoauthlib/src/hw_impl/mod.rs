@@ -1,6 +1,7 @@
 use std::convert::{From, TryFrom};
 use std::ptr;
 use std::sync::Mutex;
+use log::warn;
 
 // Only temporarily!
 #[allow(unused_imports)]
@@ -54,6 +55,7 @@ pub struct AteccDevice {
     api_mutex: Mutex<()>,
     serial_number: [u8; ATCA_SERIAL_NUM_SIZE],
     aes_enabled: bool,
+    is_data_zone_locked: Option<bool>,
     slots: Vec<AtcaSlot>,
 }
 
@@ -66,13 +68,14 @@ impl Default for AteccDevice {
             api_mutex: Mutex::new(()),
             serial_number: [0; ATCA_SERIAL_NUM_SIZE],
             aes_enabled: false,
+            is_data_zone_locked: None,
             slots: Vec::new(),
         }
     }
 }
 
 impl super::AteccDeviceTrait for AteccDevice {
-    /// Trait implementationRequest ATECC to generate a vector of random bytes
+    /// Request ATECC to generate a vector of random bytes
     /// Trait implementation
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
         rand_out.resize(super::ATCA_RANDOM_BUFFER_SIZE, 0);
@@ -150,7 +153,15 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     /// Request ATECC to generate a cryptographic key
     /// Trait implementation
-    fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
+    fn gen_key(&mut self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
+        match self.data_zone_is_locked() {
+            Ok(true) => { },
+            Ok(false) => {
+                warn!("Attempting to call atcab_genkey() when data zone is unlocked");
+                return AtcaStatus::AtcaBadParam
+            },
+            Err(err) => return err,
+        }
         if let Err(err) = self.check_input_parameters(key_type, slot_number) {
             return err;
         }
@@ -162,20 +173,20 @@ impl super::AteccDeviceTrait for AteccDevice {
 
         match key_type {
             KeyType::P256EccKey => {
-                return AtcaStatus::from(unsafe {
+                AtcaStatus::from(unsafe {
                     let _guard = self
                         .api_mutex
                         .lock()
                         .expect("Could not lock atcab API mutex");
                     cryptoauthlib_sys::atcab_genkey(slot, ptr::null_mut() as *mut u8)
-                });
-            }
+                })
+            },
             KeyType::Aes => {
                 let mut key: Vec<u8> = Vec::with_capacity(ATCA_RANDOM_BUFFER_SIZE);
                 let result = self.random(&mut key);
                 if result != AtcaStatus::AtcaSuccess {
                     return result;
-                };
+                }
                 if key.len() > ATCA_AES_KEY_SIZE {
                     key.truncate(ATCA_AES_KEY_SIZE);
                 }
@@ -200,7 +211,7 @@ impl super::AteccDeviceTrait for AteccDevice {
                 } else {
                     AtcaStatus::AtcaUnimplemented // TODO
                 }
-            }
+            },
             _ => AtcaStatus::AtcaBadParam,
         }
     } // AteccDevice::gen_key()
@@ -244,23 +255,15 @@ impl super::AteccDeviceTrait for AteccDevice {
                     let mut temp_key: Vec<u8> = vec![0; 4];
                     temp_key.extend_from_slice(key_data);
                     let mut write_key: [u8; 32] = [0; 32];
-                    let mut write_key_ptr: *mut u8 = ptr::null_mut();
+                    let write_key_ptr: *mut u8 = write_key.as_mut_ptr();
                     let write_key_id: u16 = self.slots[slot as usize].config.write_key as u16;
                     let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
 
-                    match self.data_zone_is_locked() {
-                        Err(err) => return err,
-                        Ok(val) => {
-                            if val {
-                                write_key_ptr = write_key.as_mut_ptr();
-                                if self.slots[slot as usize].config.write_config
-                                    != WriteConfig::Encrypt
-                                {
-                                    return AtcaStatus::AtcaBadParam;
-                                }
-                            }
-                        }
-                    };
+                    if self.slots[slot as usize].config.write_config
+                        != WriteConfig::Encrypt
+                    {
+                        return AtcaStatus::AtcaBadParam;
+                    }
 
                     return AtcaStatus::from(unsafe {
                         let _guard = self
@@ -445,12 +448,20 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
     /// Trait implementation
-    fn data_zone_is_locked(&self) -> Result<bool, AtcaStatus> {
-        let mut is_locked: bool = false;
-        let result = self.is_locked(ATCA_LOCK_ZONE_DATA, &mut is_locked);
-        match result {
-            AtcaStatus::AtcaSuccess => Ok(is_locked),
-            _ => Err(result),
+    fn data_zone_is_locked(&mut self) -> Result<bool, AtcaStatus> {
+        match self.is_data_zone_locked {
+            Some(lock_status) => Ok(lock_status),
+            None => {
+                let mut is_locked: bool = false;
+                let result = self.is_locked(ATCA_LOCK_ZONE_DATA, &mut is_locked);
+                match result {
+                    AtcaStatus::AtcaSuccess => {
+                        self.is_data_zone_locked = Some(is_locked);
+                        Ok(is_locked)
+                    },
+                    _ => Err(result),
+                }
+            }
         }
     } // AteccDevice::configuration_is_locked()
 

@@ -47,7 +47,7 @@ fn random() {
     }
     #[cfg(not(feature="software-backend"))]
     {
-        let device = hw_backend::test_setup();
+        let device = hw_backend::test_setup(false);
     
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
@@ -66,7 +66,7 @@ fn read_config_zone() {
     #[cfg(feature="software-backend")]
     let device = sw_backend::test_setup("device-success".to_owned());
     #[cfg(not(feature="software-backend"))]
-    let device = hw_backend::test_setup();
+    let device = hw_backend::test_setup(false);
 
     let mut config_data = Vec::new();
     let device_read_config_zone = device.read_config_zone(&mut config_data);

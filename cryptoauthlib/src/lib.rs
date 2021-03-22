@@ -27,7 +27,7 @@ pub trait AteccDeviceTrait {
     /// nonce and a device random number.
     fn nonce_rand(&self, host_nonce: &[u8], rand_out: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to generate a cryptographic key
-    fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus;
+    fn gen_key(&mut self, key_type: KeyType, slot_number: u8) -> AtcaStatus;
     /// Request ATECC to import a cryptographic key
     fn import_key(&self, key_type: KeyType, key_data: &[u8], slot_number: u8) -> AtcaStatus;
     /// Function to calculate the public key from an existing private key in a slot
@@ -43,7 +43,7 @@ pub trait AteccDeviceTrait {
     fn configuration_is_locked(&self) -> Result<bool, AtcaStatus>;
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn data_zone_is_locked(&self) -> Result<bool, AtcaStatus>;
+    fn data_zone_is_locked(&mut self) -> Result<bool, AtcaStatus>;
     /// Request ATECC to read and return own configuration zone.
     /// Note: this function returns raw data, function get_config(..) implements a more
     /// structured return value.
