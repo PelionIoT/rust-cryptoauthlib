@@ -2,7 +2,6 @@ use serde::Deserialize;
 use serial_test::serial;
 use std::fs::read_to_string;
 use std::path::Path;
-use log::error;
 
 #[derive(Deserialize)]
 struct Config {
@@ -90,16 +89,9 @@ pub fn test_setup(data_zone_must_be_locked: bool) -> super::AteccDevice {
     let result = super::setup_atecc_device(iface_cfg);
     assert_eq!(result.is_ok(), true);
 
-    let mut device = result.unwrap();
+    let device = result.unwrap();
 
-    let is_locked = match device.data_zone_is_locked() {
-        Ok(true) => true,
-        Ok(false) => false,
-        Err(err) => {
-            error!("Data zone lock status check failed: {}", err);
-            false
-        },
-    };
+    let is_locked = device.data_zone_is_locked();
     if data_zone_must_be_locked {
         // Prevent further calls when data zone is not locked
         if !is_locked {
@@ -227,7 +219,7 @@ fn nonce_rand() {
 #[test]
 #[serial]
 fn gen_key() {
-    let mut device = test_setup(true);
+    let device = test_setup(true);
     println!("After test_setup()");
     let mut check_ver_result: super::AtcaStatus = super::AtcaStatus::AtcaSuccess;
     let expected = match is_chip_version_608(&device) {
@@ -395,17 +387,10 @@ fn configuration_is_locked() {
 #[test]
 #[serial]
 fn data_zone_is_locked() {
-    let mut device = test_setup(false);
-    let mut is_locked = false;
-    let mut is_locked_check_result = super::AtcaStatus::AtcaSuccess;
-
-    match device.data_zone_is_locked() {
-        Ok(val) => is_locked = val,
-        Err(err) => is_locked_check_result = err,
-    };
+    let device = test_setup(false);
+    let is_locked = device.data_zone_is_locked();
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
-    assert_eq!(is_locked_check_result.to_string(), "AtcaSuccess");
     assert_eq!(is_locked, true);
 }
 

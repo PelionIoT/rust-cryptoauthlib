@@ -153,15 +153,12 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     /// Request ATECC to generate a cryptographic key
     /// Trait implementation
-    fn gen_key(&mut self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
-        match self.data_zone_is_locked() {
-            Ok(true) => { },
-            Ok(false) => {
-                warn!("Attempting to call atcab_genkey() when data zone is unlocked");
-                return AtcaStatus::AtcaBadParam
-            },
-            Err(err) => return err,
+    fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
+        if !self.data_zone_is_locked() {
+            warn!("Attempting to call atcab_genkey() when data zone is unlocked");
+            return AtcaStatus::AtcaBadParam;
         }
+        
         if let Err(err) = self.check_input_parameters(key_type, slot_number) {
             return err;
         }
@@ -448,22 +445,12 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
     /// Trait implementation
-    fn data_zone_is_locked(&mut self) -> Result<bool, AtcaStatus> {
+    fn data_zone_is_locked(&self) -> bool {
         match self.is_data_zone_locked {
-            Some(lock_status) => Ok(lock_status),
-            None => {
-                let mut is_locked: bool = false;
-                let result = self.is_locked(ATCA_LOCK_ZONE_DATA, &mut is_locked);
-                match result {
-                    AtcaStatus::AtcaSuccess => {
-                        self.is_data_zone_locked = Some(is_locked);
-                        Ok(is_locked)
-                    },
-                    _ => Err(result),
-                }
-            }
+            Some(true) => true,
+            _ => false,
         }
-    } // AteccDevice::configuration_is_locked()
+    } // AteccDevice::data_zone_is_locked()
 
     /// Request ATECC to read and return own configuration zone.
     /// Note: this function returns raw data, function get_config(..) implements a more
@@ -626,6 +613,14 @@ impl AteccDevice {
                     atecc_device.release();
                     return Err(err.to_string());
                 }
+            }
+        };
+
+        atecc_device.is_data_zone_locked = {
+            let mut is_locked = false;
+            match atecc_device.is_locked(ATCA_LOCK_ZONE_DATA, &mut is_locked) {
+                AtcaStatus::AtcaSuccess => Some(is_locked),
+                _ => None,
             }
         };
 

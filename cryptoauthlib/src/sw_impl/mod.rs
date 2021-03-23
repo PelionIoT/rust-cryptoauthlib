@@ -42,7 +42,7 @@ impl super::AteccDeviceTrait for AteccDevice {
         self.result
     }
     /// Request ATECC to generate a cryptographic key
-    fn gen_key(&mut self, _key_type: KeyType, _slot_number: u8) -> AtcaStatus {
+    fn gen_key(&self, _key_type: KeyType, _slot_number: u8) -> AtcaStatus {
         self.result
     }
     /// Request ATECC to import a cryptographic key
@@ -82,10 +82,10 @@ impl super::AteccDeviceTrait for AteccDevice {
     }
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn data_zone_is_locked(&mut self) -> Result<bool, AtcaStatus> {
+    fn data_zone_is_locked(&self) -> bool {
         match self.result {
-            AtcaStatus::AtcaSuccess => Ok(true),
-            _ => Err(self.result),
+            AtcaStatus::AtcaSuccess => true,
+            _ => false,
         }
     }
     /// Request ATECC to read and return own configuration zone.
