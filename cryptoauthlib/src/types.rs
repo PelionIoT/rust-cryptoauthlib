@@ -349,6 +349,7 @@ pub enum AtcaDeviceType {
     ATSHA206A,
     AtcaTestDevFail,
     AtcaTestDevSuccess,
+    AtcaTestDevNone,
     AtcaDevUnknown,
 } // pub enum AtcaDeviceType
 

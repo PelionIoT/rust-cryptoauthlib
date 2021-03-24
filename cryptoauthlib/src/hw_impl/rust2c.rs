@@ -14,8 +14,8 @@ impl TryFrom<super::AtcaIfaceCfg> for cryptoauthlib_sys::ATCAIfaceCfg {
                         bus: unsafe { x.atcai2c.bus },
                         baud: unsafe { x.atcai2c.baud },
                     },
-                    None => return Err(())
-                }
+                    None => return Err(()),
+                },
             },
             _ => return Err(()),
         }; // match rust_iface_cfg.iface_type
