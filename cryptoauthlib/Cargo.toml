@@ -1,6 +1,6 @@
 [package]
 name = "rust-cryptoauthlib"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
            "Michal Protasowicki <michal.protasowicki@globallogic.com>",
            "Krzysztof Bembnista <krzysztof.bembnista@globallogic.com>",
@@ -16,11 +16,18 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.2.*" }
+cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.2.0" }
 strum_macros = "0.19.4"
 lazy_static = "1.4.0"
+rand = "0.8.0"
+log = { version = "0.4.14", features = ["serde"] }
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.4.2"
 serial_test = "0.5.1"
+
+[features]
+default = ["hardware-backend"]
+hardware-backend = []
+software-backend = []
