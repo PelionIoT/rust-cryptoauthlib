@@ -1,15 +1,23 @@
+use log::warn;
 use std::convert::{From, TryFrom};
 use std::ptr;
 use std::sync::Mutex;
-use log::warn;
 
 // Only temporarily!
 #[allow(unused_imports)]
-use super::{AtcaIfaceCfg, AtcaIface, AtcaIfaceI2c, AtcaStatus, AtcaDeviceType, AtcaIfaceType, AtcaIfaceCfgPtrWrapper, AtcaSlot, KeyType, NonceTarget, 
-    SignEcdsaParam, VerifyEcdsaParam, SignMode, VerifyMode, InfoCmdType, WriteConfig, ReadKey, EccKeyAttr, SlotConfig};
-use super::{ATCA_ZONE_CONFIG, ATCA_SERIAL_NUM_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_RANDOM_BUFFER_SIZE, ATCA_NONCE_NUMIN_SIZE, ATCA_ATECC_PUB_KEY_SIZE,
-    ATCA_SIG_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_TEMPKEY_KEYID, ATCA_AES_KEY_SIZE, ATCA_BLOCK_SIZE, ATCA_ZONE_DATA, ATCA_ATECC_PRIV_KEY_SIZE,
-    ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY, ATCA_SHA2_256_DIGEST_SIZE, ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA, ATCA_ATSHA_CONFIG_BUFFER_SIZE};
+use super::{
+    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
+    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, ReadKey, SignEcdsaParam,
+    SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+};
+use super::{
+    ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY,
+    ATCA_ATECC_PRIV_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT,
+    ATCA_ATECC_TEMPKEY_KEYID, ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE,
+    ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA, ATCA_NONCE_NUMIN_SIZE, ATCA_RANDOM_BUFFER_SIZE,
+    ATCA_SERIAL_NUM_SIZE, ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG,
+    ATCA_ZONE_DATA,
+};
 
 mod c2rust;
 mod rust2c;
@@ -117,7 +125,7 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// all other devices, only TempKey (32 bytes) is available.
     /// Trait implementation
     fn nonce(&self, target: super::NonceTarget, data: &[u8]) -> AtcaStatus {
-        if (self.get_device_type() != Some(AtcaDeviceType::ATECC608A))
+        if (self.get_device_type() != AtcaDeviceType::ATECC608A)
             & (target != super::NonceTarget::TempKey)
             & (data.len() != super::ATCA_NONCE_SIZE)
         {
@@ -158,7 +166,7 @@ impl super::AteccDeviceTrait for AteccDevice {
             warn!("Attempting to call atcab_genkey() when data zone is unlocked");
             return AtcaStatus::AtcaBadParam;
         }
-        
+
         if let Err(err) = self.check_input_parameters(key_type, slot_number) {
             return err;
         }
@@ -169,15 +177,13 @@ impl super::AteccDeviceTrait for AteccDevice {
         };
 
         match key_type {
-            KeyType::P256EccKey => {
-                AtcaStatus::from(unsafe {
-                    let _guard = self
-                        .api_mutex
-                        .lock()
-                        .expect("Could not lock atcab API mutex");
-                    cryptoauthlib_sys::atcab_genkey(slot, ptr::null_mut() as *mut u8)
-                })
-            },
+            KeyType::P256EccKey => AtcaStatus::from(unsafe {
+                let _guard = self
+                    .api_mutex
+                    .lock()
+                    .expect("Could not lock atcab API mutex");
+                cryptoauthlib_sys::atcab_genkey(slot, ptr::null_mut() as *mut u8)
+            }),
             KeyType::Aes => {
                 let mut key: Vec<u8> = Vec::with_capacity(ATCA_RANDOM_BUFFER_SIZE);
                 let result = self.random(&mut key);
@@ -208,7 +214,7 @@ impl super::AteccDeviceTrait for AteccDevice {
                 } else {
                     AtcaStatus::AtcaUnimplemented // TODO
                 }
-            },
+            }
             _ => AtcaStatus::AtcaBadParam,
         }
     } // AteccDevice::gen_key()
@@ -256,9 +262,7 @@ impl super::AteccDeviceTrait for AteccDevice {
                     let write_key_id: u16 = self.slots[slot as usize].config.write_key as u16;
                     let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
 
-                    if self.slots[slot as usize].config.write_config
-                        != WriteConfig::Encrypt
-                    {
+                    if self.slots[slot as usize].config.write_config != WriteConfig::Encrypt {
                         return AtcaStatus::AtcaBadParam;
                     }
 
@@ -327,12 +331,7 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     /// Request ATECC to generate an ECDSA signature
     /// Trait implementation
-    fn sign_hash(
-        &self,
-        mode: SignMode,
-        slot_number: u8,
-        signature: &mut Vec<u8>,
-    ) -> AtcaStatus {
+    fn sign_hash(&self, mode: SignMode, slot_number: u8, signature: &mut Vec<u8>) -> AtcaStatus {
         if slot_number >= ATCA_ATECC_SLOTS_COUNT {
             return AtcaStatus::AtcaInvalidId;
         }
@@ -426,7 +425,7 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     /// Request ATECC to return own device type
     /// Trait implementation
-    fn get_device_type(&self) -> Option<AtcaDeviceType> {
+    fn get_device_type(&self) -> AtcaDeviceType {
         self.get_device_type()
     } // AteccDevice::get_device_type()
 
@@ -446,10 +445,7 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// If true, a chip can be used for cryptographic operations
     /// Trait implementation
     fn data_zone_is_locked(&self) -> bool {
-        match self.is_data_zone_locked {
-            Some(true) => true,
-            _ => false,
-        }
+        matches!(self.is_data_zone_locked, Some(true))
     } // AteccDevice::data_zone_is_locked()
 
     /// Request ATECC to read and return own configuration zone.
@@ -628,14 +624,14 @@ impl AteccDevice {
     } // AteccDevice::new()
 
     /// Request ATECC to return own device type
-    fn get_device_type(&self) -> Option<AtcaDeviceType> {
-        Some(AtcaDeviceType::from(unsafe {
+    fn get_device_type(&self) -> AtcaDeviceType {
+        AtcaDeviceType::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
             cryptoauthlib_sys::atcab_get_device_type()
-        }))
+        })
     } // AteccDevice::get_device_type()
 
     /// Request ATECC to read and return own configuration zone.
@@ -741,9 +737,7 @@ impl AteccDevice {
     fn get_config_buffer_size(&self) -> usize {
         let device_type = self.get_device_type();
         match device_type {
-            Some(AtcaDeviceType::ATECC508A)
-            | Some(AtcaDeviceType::ATECC608A)
-            | Some(AtcaDeviceType::ATECC108A) => {
+            AtcaDeviceType::ATECC508A | AtcaDeviceType::ATECC608A | AtcaDeviceType::ATECC108A => {
                 ATCA_ATECC_CONFIG_BUFFER_SIZE
             }
             _ => ATCA_ATSHA_CONFIG_BUFFER_SIZE,
