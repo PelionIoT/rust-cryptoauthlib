@@ -98,3 +98,11 @@ pub fn setup_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, Stri
         },
     }
 }
+
+impl AtcaSlot {
+    pub fn is_valid(self) -> bool {
+        // As long as exclusive range is experimental, this should work.
+        // self.id is always greater than 0
+        self.id < ATCA_ATECC_SLOTS_COUNT
+    }
+}
