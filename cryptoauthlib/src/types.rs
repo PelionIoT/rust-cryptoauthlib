@@ -89,8 +89,12 @@ pub struct AtcaSlot {
 }
 
 impl Default for AtcaSlot {
-    fn default() -> AtcaSlot {
-        unsafe { std::mem::zeroed() }
+    fn default() -> Self {
+        AtcaSlot {
+            id: 0u8,
+            is_locked: false,
+            config: SlotConfig::default(),
+        }
     }
 }
 
@@ -197,6 +201,28 @@ pub struct SlotConfig {
     pub pub_info: bool,
 }
 
+impl Default for SlotConfig {
+    fn default() -> Self {
+        SlotConfig {
+            write_config: WriteConfig::Rfu,
+            key_type: KeyType::Rfu,
+            read_key: ReadKey::default(),
+            ecc_key_attr: EccKeyAttr::default(),
+            x509id: 0u8,
+            auth_key: 0u8,
+            write_key: 0u8,
+            is_secret: false,
+            limited_use: false,
+            no_mac: false,
+            persistent_disable: false,
+            req_auth: false,
+            req_random: false,
+            lockable: false,
+            pub_info: false,
+        }
+    }
+}
+
 /// Detailed ECC key attributes as stored in slot configuration
 #[derive(Copy, Clone, Debug)]
 pub struct EccKeyAttr {
@@ -231,6 +257,18 @@ pub struct EccKeyAttr {
     pub ecdh_secret_out: bool,
 }
 
+impl Default for EccKeyAttr {
+    fn default() -> Self {
+        EccKeyAttr {
+            is_private: false,
+            ext_sign: false,
+            int_sign: false,
+            ecdh_operation: false,
+            ecdh_secret_out: false,
+        }
+    }
+}
+
 /// Detailed ATECC key slot read attributes
 #[derive(Copy, Clone, Debug)]
 pub struct ReadKey {
@@ -249,6 +287,15 @@ pub struct ReadKey {
     /// unless the CheckMac copy operation is explicitly desired,
     /// regardless of any other read/write restrictions.
     pub slot_number: u8,
+}
+
+impl Default for ReadKey {
+    fn default() -> Self {
+        ReadKey {
+            encrypt_read: false,
+            slot_number: 0u8,
+        }
+    }
 }
 
 /// Detailed ATECC key slot write configuration
