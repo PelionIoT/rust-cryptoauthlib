@@ -17,7 +17,7 @@ struct Device {
     pub rx_retries: Option<i32>,
 }
 
-#[derive(Deserialize,Copy,Clone)]
+#[derive(Deserialize, Copy, Clone)]
 struct Interface {
     pub slave_address: u8,
     pub bus: u8,
@@ -47,35 +47,28 @@ fn iface_setup(config_file: String) -> Result<super::AtcaIfaceCfg, String> {
     let iface_cfg = super::AtcaIfaceCfg::default();
 
     match config.device.iface_type.as_str() {
-        "i2c" => {
-            Ok(iface_cfg
-                .set_iface_type("i2c".to_owned())
-                .set_devtype(config.device.device_type)
-                .set_wake_delay(config.device.wake_delay.unwrap())
-                .set_rx_retries(config.device.rx_retries.unwrap())
-                .set_iface(
-                    super::AtcaIface::default()
-                        .set_atcai2c(
-                            super::AtcaIfaceI2c::default()
-                                .set_slave_address(config.interface.unwrap().slave_address)
-                                .set_bus(config.interface.unwrap().bus)
-                                .set_baud(config.interface.unwrap().baud)
-                        )
-                    )
-            )
-        },
-        "test-interface" => {
-            Ok(iface_cfg
-                .set_iface_type("test-interface".to_owned())
-                .set_devtype(config.device.device_type.as_str().to_owned())
-            )
-        },
+        "i2c" => Ok(iface_cfg
+            .set_iface_type("i2c".to_owned())
+            .set_devtype(config.device.device_type)
+            .set_wake_delay(config.device.wake_delay.unwrap())
+            .set_rx_retries(config.device.rx_retries.unwrap())
+            .set_iface(
+                super::AtcaIface::default().set_atcai2c(
+                    super::AtcaIfaceI2c::default()
+                        .set_slave_address(config.interface.unwrap().slave_address)
+                        .set_bus(config.interface.unwrap().bus)
+                        .set_baud(config.interface.unwrap().baud),
+                ),
+            )),
+        "test-interface" => Ok(iface_cfg
+            .set_iface_type("test-interface".to_owned())
+            .set_devtype(config.device.device_type.as_str().to_owned())),
         _ => Err("unsupported interface type".to_owned()),
     }
 }
 
 /// Setup tests.
-/// 
+///
 /// # Arguments
 /// * 'data_zone_must_be_locked == true' prevents further calls if data zone is not locked
 /// * 'data_zone_must_be_locked == false' allows further calls even if data zone is not locked
@@ -96,12 +89,11 @@ pub fn test_setup(data_zone_must_be_locked: bool) -> super::AteccDevice {
         // Prevent further calls when data zone is not locked
         if !is_locked {
             device.release();
-            assert_eq!(is_locked,true);
-        }                
+            assert_eq!(is_locked, true);
+        }
     }
 
     device
-    
 }
 
 // test_teardown() is not needed, it is a one-liner and if it fails, then
@@ -123,7 +115,7 @@ fn new() {
     let serial_number = device.get_serial_number();
     let mut slots = Vec::new();
     let get_config = device.get_config(&mut slots);
-    
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
     assert_eq!(call_result.to_string(), "AtcaSuccess");
     assert_eq!(aes_should_be_enabled, device.is_aes_enabled());
@@ -134,10 +126,7 @@ fn new() {
     assert_eq!(slots[0].id, 0);
     assert_eq!(slots[SLOTS_COUNT - 1].id, (SLOTS_COUNT - 1) as u8);
     assert_ne!(slots[0].config.key_type, super::KeyType::Rfu);
-    assert_ne!(
-        slots[SLOTS_COUNT - 1].config.key_type,
-        super::KeyType::Rfu
-    );
+    assert_ne!(slots[SLOTS_COUNT - 1].config.key_type, super::KeyType::Rfu);
 }
 
 #[test]
@@ -181,8 +170,8 @@ fn nonce() {
         Err(err) => {
             check_ver_result = err;
             super::AtcaStatus::AtcaBadParam
-        },
-    }; 
+        }
+    };
 
     let nonce_32_ok = device.nonce(super::NonceTarget::TempKey, &nonce_32);
     let nonce_64_ok = device.nonce(super::NonceTarget::MsgDigBuf, &nonce_64);
@@ -228,7 +217,7 @@ fn gen_key() {
         Err(err) => {
             check_ver_result = err;
             super::AtcaStatus::AtcaBadParam
-        },
+        }
     };
 
     let device_gen_key_bad_1 =

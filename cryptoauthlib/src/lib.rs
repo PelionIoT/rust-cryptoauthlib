@@ -6,9 +6,9 @@ extern crate lazy_static;
 include!("types.rs");
 include!("constants.rs");
 
+mod atca_iface_cfg;
 mod hw_impl;
 mod sw_impl;
-mod atca_iface_cfg;
 #[cfg(test)]
 mod unit_tests;
 
@@ -35,9 +35,14 @@ pub trait AteccDeviceTrait {
     /// Request ATECC to generate an ECDSA signature
     fn sign_hash(&self, mode: SignMode, slot_number: u8, signature: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to verify ECDSA signature
-    fn verify_hash(&self, mode: VerifyMode, hash: &[u8], signature: &[u8]) -> Result<bool, AtcaStatus>;
+    fn verify_hash(
+        &self,
+        mode: VerifyMode,
+        hash: &[u8],
+        signature: &[u8],
+    ) -> Result<bool, AtcaStatus>;
     /// Request ATECC to return own device type
-    fn get_device_type(&self) -> Option<AtcaDeviceType>;
+    fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
     fn configuration_is_locked(&self) -> Result<bool, AtcaStatus>;
@@ -68,7 +73,7 @@ pub trait AteccDeviceTrait {
     fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus>;
     /// Get serial number of the ATECC device
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE];
-    /// 
+    ///
     fn is_aes_enabled(&self) -> bool;
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus;
@@ -78,12 +83,15 @@ pub type AteccDevice = Box<dyn AteccDeviceTrait + Send + Sync>;
 
 pub fn setup_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
     match r_iface_cfg.devtype {
-        AtcaDeviceType::AtcaTestDevSuccess 
-        | AtcaDeviceType::AtcaTestDevFail => match sw_impl::AteccDevice::new(r_iface_cfg) {
-            Ok(x) => Ok(Box::new(x)),
-            Err(err) => Err(err),
-        },
-        AtcaDeviceType::AtcaDevUnknown => Err(String::from("Attempting to create an unknown device type")),
+        AtcaDeviceType::AtcaTestDevSuccess | AtcaDeviceType::AtcaTestDevFail => {
+            match sw_impl::AteccDevice::new(r_iface_cfg) {
+                Ok(x) => Ok(Box::new(x)),
+                Err(err) => Err(err),
+            }
+        }
+        AtcaDeviceType::AtcaDevUnknown => {
+            Err(String::from("Attempting to create an unknown device type"))
+        }
         _ => match hw_impl::AteccDevice::new(r_iface_cfg) {
             Ok(x) => Ok(Box::new(x)),
             Err(err) => Err(err),

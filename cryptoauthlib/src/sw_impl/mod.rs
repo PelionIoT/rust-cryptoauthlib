@@ -1,8 +1,11 @@
 use rand::{distributions::Standard, Rng};
 // Only temporarily!
-#[allow(unused_imports,deprecated)]
-use super::{AtcaIfaceCfg, AtcaIface, AtcaIfaceI2c, AtcaStatus, AtcaDeviceType, AtcaIfaceType, AtcaIfaceCfgPtrWrapper, AtcaSlot, KeyType, NonceTarget, 
-    SignEcdsaParam, VerifyEcdsaParam, SignMode, VerifyMode, InfoCmdType, WriteConfig, ReadKey, EccKeyAttr, SlotConfig};
+#[allow(unused_imports, deprecated)]
+use super::{
+    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
+    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, ReadKey, SignEcdsaParam,
+    SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+};
 use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 
 pub struct AteccDevice {
@@ -19,7 +22,10 @@ impl Default for AteccDevice {
 
 impl super::AteccDeviceTrait for AteccDevice {
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
-        let vector: Vec<u8> = rand::thread_rng().sample_iter(Standard).take(ATCA_RANDOM_BUFFER_SIZE).collect();
+        let vector: Vec<u8> = rand::thread_rng()
+            .sample_iter(Standard)
+            .take(ATCA_RANDOM_BUFFER_SIZE)
+            .collect();
         rand_out.resize(ATCA_RANDOM_BUFFER_SIZE, 0u8);
         rand_out.copy_from_slice(&vector);
         self.result
@@ -58,18 +64,23 @@ impl super::AteccDeviceTrait for AteccDevice {
         self.result
     }
     /// Request ATECC to verify ECDSA signature
-    fn verify_hash(&self, _mode: VerifyMode, _hash: &[u8], _signature: &[u8]) -> Result<bool, AtcaStatus> {
+    fn verify_hash(
+        &self,
+        _mode: VerifyMode,
+        _hash: &[u8],
+        _signature: &[u8],
+    ) -> Result<bool, AtcaStatus> {
         match self.result {
             AtcaStatus::AtcaSuccess => Ok(true),
             _ => Err(self.result),
         }
     }
     /// Request ATECC to return own device type
-    fn get_device_type(&self) -> Option<AtcaDeviceType> {
+    fn get_device_type(&self) -> AtcaDeviceType {
         match self.result {
-            AtcaStatus::AtcaSuccess => Some(AtcaDeviceType::AtcaTestDevSuccess),
-            AtcaStatus::AtcaFuncFail => Some(AtcaDeviceType::AtcaTestDevFail),
-            _ => None,
+            AtcaStatus::AtcaSuccess => AtcaDeviceType::AtcaTestDevSuccess,
+            AtcaStatus::AtcaFuncFail => AtcaDeviceType::AtcaTestDevFail,
+            _ => AtcaDeviceType::AtcaTestDevNone,
         }
     }
     /// Request ATECC to check if its configuration is locked.
@@ -83,10 +94,7 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
     fn data_zone_is_locked(&self) -> bool {
-        match self.result {
-            AtcaStatus::AtcaSuccess => true,
-            _ => false,
-        }
+        matches!(self.result, AtcaStatus::AtcaSuccess)
     }
     /// Request ATECC to read and return own configuration zone.
     /// Note: this function returns raw data, function get_config(..) implements a more
@@ -128,21 +136,16 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
         let mut serial_number = [0; ATCA_SERIAL_NUM_SIZE];
-        match self.result {
-            AtcaStatus::AtcaSuccess => {
-                serial_number[0] = 0x01;
-                serial_number[1] = 0x23;
-            },
-            _ => (),
+        if let AtcaStatus::AtcaSuccess = self.result {
+            serial_number[0] = 0x01;
+            serial_number[1] = 0x23;
         }
+
         serial_number
     }
-    
+
     fn is_aes_enabled(&self) -> bool {
-        match self.result {
-            AtcaStatus::AtcaSuccess => true,
-            _ => false,
-        }
+        matches!(self.result, AtcaStatus::AtcaSuccess)
     }
 
     /// ATECC device instance destructor
@@ -152,12 +155,15 @@ impl super::AteccDeviceTrait for AteccDevice {
 }
 
 impl AteccDevice {
-    pub fn new(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice,String> {
+    pub fn new(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
         let mut device = AteccDevice::default();
         match r_iface_cfg.iface_type {
             AtcaIfaceType::AtcaTestIface => (),
             _ => {
-                let err = format!("Software implementation of an AteccDevice does not support interface {}", r_iface_cfg.iface_type.to_string());
+                let err = format!(
+                    "Software implementation of an AteccDevice does not support interface {}",
+                    r_iface_cfg.iface_type.to_string()
+                );
                 return Err(err);
             }
         }
@@ -165,7 +171,10 @@ impl AteccDevice {
             AtcaDeviceType::AtcaTestDevFail => AtcaStatus::AtcaFuncFail,
             AtcaDeviceType::AtcaTestDevSuccess => AtcaStatus::AtcaSuccess,
             _ => {
-                let err = format!("Software implementation of an AteccDevice does not support interface {}",r_iface_cfg.devtype.to_string());
+                let err = format!(
+                    "Software implementation of an AteccDevice does not support interface {}",
+                    r_iface_cfg.devtype.to_string()
+                );
                 return Err(err);
             }
         };

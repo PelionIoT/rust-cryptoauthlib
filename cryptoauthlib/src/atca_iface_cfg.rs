@@ -1,5 +1,5 @@
+use super::{AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaIfaceType};
 use log::error;
-use super::{AtcaIface, AtcaIfaceCfg, AtcaIfaceType, AtcaDeviceType, AtcaIfaceI2c};
 
 impl Default for AtcaIfaceCfg {
     fn default() -> AtcaIfaceCfg {
@@ -39,7 +39,7 @@ impl AtcaIfaceCfg {
             _ => {
                 error!("Unsupported ATCA interface type {}", iface_type);
                 AtcaIfaceType::AtcaUnknownIface
-            }            
+            }
         };
         self
     }
@@ -90,5 +90,4 @@ impl AtcaIfaceI2c {
         self.baud = baud;
         self
     }
-
 }
