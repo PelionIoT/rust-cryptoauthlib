@@ -45,7 +45,7 @@ pub trait AteccDeviceTrait {
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn configuration_is_locked(&self) -> Result<bool, AtcaStatus>;
+    fn configuration_is_locked(&self) -> bool;
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
     fn data_zone_is_locked(&self) -> bool;
@@ -71,10 +71,25 @@ pub trait AteccDeviceTrait {
     ) -> AtcaStatus;
     /// Command accesses some static or dynamic information from the ATECC chip
     fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus>;
+    ///
+    fn set_write_encryption_key(&self, encryption_key: &[u8]) -> AtcaStatus;
     /// Get serial number of the ATECC device
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE];
-    ///
+    /// Checks if the chip supports AES encryption.
+    /// (only relevant for the ATECC608x chip)
     fn is_aes_enabled(&self) -> bool;
+    /// Checks if the chip supports AES for KDF operations
+    /// (only relevant for the ATECC608x chip)
+    fn is_kdf_aes_enabled(&self) -> bool;
+    /// Checks whether transmission between chip and host is to be encrypted
+    /// (IO encryption is only possible for ATECC608x chip)
+    fn is_io_protection_key_enabled(&self) -> bool;
+    ///
+    /// (only relevant for the ATECC608x chip)
+    fn get_ecdh_output_protection_state(&self) -> OutputProtectionState;
+    ///
+    /// (only relevant for the ATECC608x chip)
+    fn get_kdf_output_protection_state(&self) -> OutputProtectionState;
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus;
 }

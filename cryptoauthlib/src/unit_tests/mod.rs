@@ -51,16 +51,20 @@ fn random() {
     }
     #[cfg(not(feature = "software-backend"))]
     {
-        let device = hw_backend::test_setup(false);
+        let device = hw_backend::test_setup();
 
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
-        let sum: u16 = rand_out.iter().fold(0, |s, &x| s + x as u16);
 
-        assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
-        assert_ne!(sum, 0x0FF0); // Fail whenever the chip has no configuration locked
+        let mut expected = super::AtcaStatus::AtcaSuccess;
+        if !device.configuration_is_locked() {
+            println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+            expected = super::AtcaStatus::AtcaNotLocked;
+        } else {
+            assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+        }
         assert_eq!(device.release().to_string(), "AtcaSuccess");
-        assert_eq!(device_random.to_string(), "AtcaSuccess");
+        assert_eq!(device_random, expected);
     }
 }
 
@@ -70,7 +74,7 @@ fn read_config_zone() {
     #[cfg(feature = "software-backend")]
     let device = sw_backend::test_setup("device-success".to_owned());
     #[cfg(not(feature = "software-backend"))]
-    let device = hw_backend::test_setup(false);
+    let device = hw_backend::test_setup();
 
     let mut config_data = Vec::new();
     let device_read_config_zone = device.read_config_zone(&mut config_data);

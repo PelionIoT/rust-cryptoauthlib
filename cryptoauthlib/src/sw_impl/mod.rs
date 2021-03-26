@@ -3,8 +3,8 @@ use rand::{distributions::Standard, Rng};
 #[allow(unused_imports, deprecated)]
 use super::{
     AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, ReadKey, SignEcdsaParam,
-    SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState,
+    ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
 };
 use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 
@@ -85,11 +85,8 @@ impl super::AteccDeviceTrait for AteccDevice {
     }
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn configuration_is_locked(&self) -> Result<bool, AtcaStatus> {
-        match self.result {
-            AtcaStatus::AtcaSuccess => Ok(true),
-            _ => Err(self.result),
-        }
+    fn configuration_is_locked(&self) -> bool {
+        matches!(self.result, AtcaStatus::AtcaSuccess)
     }
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
@@ -134,6 +131,10 @@ impl super::AteccDeviceTrait for AteccDevice {
         }
     }
 
+    fn set_write_encryption_key(&self, _encryption_key: &[u8]) -> AtcaStatus {
+        self.result
+    }
+
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
         let mut serial_number = [0; ATCA_SERIAL_NUM_SIZE];
         if let AtcaStatus::AtcaSuccess = self.result {
@@ -146,6 +147,22 @@ impl super::AteccDeviceTrait for AteccDevice {
 
     fn is_aes_enabled(&self) -> bool {
         matches!(self.result, AtcaStatus::AtcaSuccess)
+    }
+
+    fn is_kdf_aes_enabled(&self) -> bool {
+        matches!(self.result, AtcaStatus::AtcaSuccess)
+    }
+
+    fn is_io_protection_key_enabled(&self) -> bool {
+        matches!(self.result, AtcaStatus::AtcaSuccess)
+    }
+
+    fn get_ecdh_output_protection_state(&self) -> OutputProtectionState {
+        OutputProtectionState::ClearTextAllowed
+    }
+
+    fn get_kdf_output_protection_state(&self) -> OutputProtectionState {
+        OutputProtectionState::ClearTextAllowed
     }
 
     /// ATECC device instance destructor
