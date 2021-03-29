@@ -397,6 +397,7 @@ pub enum AtcaDeviceType {
     AtcaTestDevFail,
     AtcaTestDevSuccess,
     AtcaTestDevNone,
+    AtcaTestDevFailUnimplemented,
     AtcaDevUnknown,
 } // pub enum AtcaDeviceType
 
