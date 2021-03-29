@@ -13,7 +13,7 @@ pub struct AteccDevice {
 }
 
 // Software ATECC implements following functions:
-// new(), random(), get_device_type(), release().
+// new(), random(), get_device_type(), configuration_is_locked(), get_config(), release().
 // All aothers are considered to be mocked.
 // Depending on set device type they either:
 // - always fails
@@ -94,7 +94,8 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// If true, a chip can be used for cryptographic operations
     fn configuration_is_locked(&self) -> Result<bool, AtcaStatus> {
         match self.dev_type {
-            AtcaDeviceType::AtcaTestDevSuccess => Ok(true),
+            AtcaDeviceType::AtcaTestDevSuccess
+            | AtcaDeviceType::AtcaTestDevFailUnimplemented => Ok(true),
             _ => Err(self.default_dev_status()),
         }
     }
@@ -117,7 +118,11 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Returns a structure containing configuration data read from ATECC
     /// during initialization of the AteccDevice object.
     fn get_config(&self, _atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus {
-        self.default_dev_status()
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess
+            | AtcaDeviceType::AtcaTestDevFailUnimplemented => AtcaStatus::AtcaSuccess,
+            _ => AtcaStatus::AtcaUnimplemented,
+        }
     }
 
     /// A generic function that reads data from the chip
