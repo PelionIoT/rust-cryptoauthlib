@@ -76,6 +76,66 @@ impl Default for VerifyEcdsaParam {
     }
 }
 
+/// structure that stores data for options supported by the chip
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct ChipOptions {
+    /// If true, then the protection functions are enabled via the secret key
+    /// stored in the slot indicated by io_key_in_slot.
+    /// If false, the security functions are disabled and fields 'io_key_in_slot',
+    /// 'ecdh_output_protection' and 'kdf_output_protection' are irrelevant
+    /// (only relevant for the ATECC608x chip)
+    pub io_key_enabled: bool,
+    /// slot number where the key for encrypting transmission between chip and host is placed
+    pub io_key_in_slot: u8,
+    ///
+    pub aes_enabled: bool,
+    ///
+    pub kdf_aes_enabled: bool,
+    ///
+    pub ecdh_output_protection: OutputProtectionState,
+    ///
+    pub kdf_output_protection: OutputProtectionState,
+}
+
+impl Default for ChipOptions {
+    fn default() -> ChipOptions {
+        ChipOptions {
+            io_key_enabled: false,
+            io_key_in_slot: 0x00,
+            aes_enabled: false,
+            kdf_aes_enabled: false,
+            ecdh_output_protection: OutputProtectionState::Invalid,
+            kdf_output_protection: OutputProtectionState::Invalid,
+        }
+    }
+}
+
+/// 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum OutputProtectionState {
+    /// Output in the clear is OK, though encryption can still be indicated in the mode parameter
+    ClearTextAllowed = 0x00,
+    /// Output is OK, but the result must be encrypted.
+    /// The state of the encryption bit in the mode parameter will be ignored by the ECDH command.
+    EncryptedOutputOnly = 0x01,
+    /// Result must be stored in TempKey or and key slot, output outside the chip is forbidden
+    ForbiddenOutputOutsideChip = 0x02,
+    /// Invalid state
+    Invalid = 0x03,
+}
+
+impl From<u8> for OutputProtectionState {
+    fn from(orig: u8) -> Self {
+        match orig {
+            0x0 => OutputProtectionState::ClearTextAllowed,
+            0x1 => OutputProtectionState::EncryptedOutputOnly,
+            0x2 => OutputProtectionState::ForbiddenOutputOutsideChip,
+            _ => OutputProtectionState::Invalid,
+        }
+    }
+}
+
 /// An ATECC slot
 #[derive(Copy, Clone, Debug)]
 pub struct AtcaSlot {

@@ -1,4 +1,4 @@
-use log::warn;
+use std::cell::Cell;
 use std::convert::{From, TryFrom};
 use std::ptr;
 use std::sync::Mutex;
@@ -7,13 +7,14 @@ use std::sync::Mutex;
 #[allow(unused_imports)]
 use super::{
     AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, ReadKey, SignEcdsaParam,
-    SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+    AtcaSlot, AtcaStatus, ChipOptions, EccKeyAttr, InfoCmdType, KeyType, NonceTarget,
+    OutputProtectionState, ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam,
+    VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY,
     ATCA_ATECC_PRIV_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT,
-    ATCA_ATECC_TEMPKEY_KEYID, ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE,
+    ATCA_ATECC_TEMPKEY_KEYID, ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE, ATCA_KEY_SIZE,
     ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA, ATCA_NONCE_NUMIN_SIZE, ATCA_RANDOM_BUFFER_SIZE,
     ATCA_SERIAL_NUM_SIZE, ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG,
     ATCA_ZONE_DATA,
@@ -62,8 +63,10 @@ pub struct AteccDevice {
     /// A mutex to ensure a mutual access from different threads to an ATECC instance
     api_mutex: Mutex<()>,
     serial_number: [u8; ATCA_SERIAL_NUM_SIZE],
-    aes_enabled: bool,
-    is_data_zone_locked: Option<bool>,
+    config_zone_locked: bool,
+    data_zone_locked: bool,
+    chip_options: ChipOptions,
+    write_encryption_key: Mutex<Cell<[u8; ATCA_KEY_SIZE]>>,
     slots: Vec<AtcaSlot>,
 }
 
@@ -75,8 +78,10 @@ impl Default for AteccDevice {
             },
             api_mutex: Mutex::new(()),
             serial_number: [0; ATCA_SERIAL_NUM_SIZE],
-            aes_enabled: false,
-            is_data_zone_locked: None,
+            config_zone_locked: false,
+            data_zone_locked: false,
+            chip_options: Default::default(),
+            write_encryption_key: Mutex::new(Cell::new([0; ATCA_KEY_SIZE])),
             slots: Vec::new(),
         }
     }
@@ -86,6 +91,9 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to generate a vector of random bytes
     /// Trait implementation
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(false) {
+            return AtcaStatus::AtcaNotLocked;
+        }
         rand_out.resize(super::ATCA_RANDOM_BUFFER_SIZE, 0);
         AtcaStatus::from(unsafe {
             let _guard = self
@@ -99,6 +107,9 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to compute a message hash (SHA256)
     /// Trait implementation
     fn sha(&self, message: Vec<u8>, digest: &mut Vec<u8>) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(false) {
+            return AtcaStatus::AtcaNotLocked;
+        }
         let length: u16 = match u16::try_from(message.len()) {
             Ok(val) => val,
             Err(_) => return AtcaStatus::AtcaBadParam,
@@ -126,8 +137,8 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Trait implementation
     fn nonce(&self, target: super::NonceTarget, data: &[u8]) -> AtcaStatus {
         if (self.get_device_type() != AtcaDeviceType::ATECC608A)
-            & (target != super::NonceTarget::TempKey)
-            & (data.len() != super::ATCA_NONCE_SIZE)
+            && (target != super::NonceTarget::TempKey)
+            && (data.len() != super::ATCA_NONCE_SIZE)
         {
             return AtcaStatus::AtcaBadParam;
         }
@@ -162,9 +173,8 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to generate a cryptographic key
     /// Trait implementation
     fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus {
-        if !self.data_zone_is_locked() {
-            warn!("Attempting to call atcab_genkey() when data zone is unlocked");
-            return AtcaStatus::AtcaBadParam;
+        if self.check_that_configuration_is_not_locked(false) {
+            return AtcaStatus::AtcaNotLocked;
         }
 
         if let Err(err) = self.check_input_parameters(key_type, slot_number) {
@@ -177,13 +187,18 @@ impl super::AteccDeviceTrait for AteccDevice {
         };
 
         match key_type {
-            KeyType::P256EccKey => AtcaStatus::from(unsafe {
-                let _guard = self
-                    .api_mutex
-                    .lock()
-                    .expect("Could not lock atcab API mutex");
-                cryptoauthlib_sys::atcab_genkey(slot, ptr::null_mut() as *mut u8)
-            }),
+            KeyType::P256EccKey => {
+                if !self.slots[slot_number as usize].config.is_secret {
+                    return AtcaStatus::AtcaBadParam;
+                }
+                AtcaStatus::from(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_genkey(slot, ptr::null_mut() as *mut u8)
+                })
+            }
             KeyType::Aes => {
                 let mut key: Vec<u8> = Vec::with_capacity(ATCA_RANDOM_BUFFER_SIZE);
                 let result = self.random(&mut key);
@@ -222,14 +237,17 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to import a cryptographic key
     /// Trait implementation
     fn import_key(&self, key_type: KeyType, key_data: &[u8], slot_number: u8) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(true) {
+            return AtcaStatus::AtcaNotLocked;
+        }
         if let Err(err) = self.check_input_parameters(key_type, slot_number) {
             return err;
         }
 
-        if ((key_type == KeyType::Aes) & (key_data.len() != ATCA_AES_KEY_SIZE))
-            | ((key_type == KeyType::P256EccKey)
-                & !((key_data.len() == ATCA_ATECC_PRIV_KEY_SIZE)
-                    | (key_data.len() == ATCA_ATECC_PUB_KEY_SIZE)))
+        if ((key_type == KeyType::Aes) && (key_data.len() != ATCA_AES_KEY_SIZE))
+            || ((key_type == KeyType::P256EccKey)
+                && !((key_data.len() == ATCA_ATECC_PRIV_KEY_SIZE)
+                    || (key_data.len() == ATCA_ATECC_PUB_KEY_SIZE)))
         {
             return AtcaStatus::AtcaInvalidSize;
         }
@@ -257,12 +275,15 @@ impl super::AteccDeviceTrait for AteccDevice {
                 _ => {
                     let mut temp_key: Vec<u8> = vec![0; 4];
                     temp_key.extend_from_slice(key_data);
-                    let mut write_key: [u8; 32] = [0; 32];
+                    let mut write_key: [u8; ATCA_KEY_SIZE] =
+                        self.write_encryption_key.lock().unwrap().get();
                     let write_key_ptr: *mut u8 = write_key.as_mut_ptr();
                     let write_key_id: u16 = self.slots[slot as usize].config.write_key as u16;
                     let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
 
-                    if self.slots[slot as usize].config.write_config != WriteConfig::Encrypt {
+                    if (self.slots[slot as usize].config.write_config != WriteConfig::Encrypt)
+                        || (self.slots[slot as usize].config.key_type != KeyType::P256EccKey)
+                    {
                         return AtcaStatus::AtcaBadParam;
                     }
 
@@ -316,6 +337,10 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Function to calculate the public key from an existing private key in a slot
     /// Trait implementation
     fn get_public_key(&self, slot_number: u8, public_key: &mut Vec<u8>) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(false) {
+            return AtcaStatus::AtcaNotLocked;
+        }
+
         if slot_number > ATCA_ATECC_SLOTS_COUNT {
             return AtcaStatus::AtcaInvalidId;
         }
@@ -332,6 +357,9 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to generate an ECDSA signature
     /// Trait implementation
     fn sign_hash(&self, mode: SignMode, slot_number: u8, signature: &mut Vec<u8>) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(true) {
+            return AtcaStatus::AtcaNotLocked;
+        }
         if slot_number >= ATCA_ATECC_SLOTS_COUNT {
             return AtcaStatus::AtcaInvalidId;
         }
@@ -364,7 +392,10 @@ impl super::AteccDeviceTrait for AteccDevice {
         hash: &[u8],
         signature: &[u8],
     ) -> Result<bool, AtcaStatus> {
-        if (signature.len() != ATCA_SIG_SIZE) | (hash.len() != ATCA_SHA2_256_DIGEST_SIZE) {
+        if self.check_that_configuration_is_not_locked(true) {
+            return Err(AtcaStatus::AtcaNotLocked);
+        }
+        if (signature.len() != ATCA_SIG_SIZE) || (hash.len() != ATCA_SHA2_256_DIGEST_SIZE) {
             return Err(AtcaStatus::AtcaInvalidSize);
         };
         let mut is_verified: bool = false;
@@ -432,20 +463,15 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
     /// Trait implementation
-    fn configuration_is_locked(&self) -> Result<bool, AtcaStatus> {
-        let mut is_locked: bool = false;
-        let result = self.is_locked(ATCA_LOCK_ZONE_CONFIG, &mut is_locked);
-        match result {
-            AtcaStatus::AtcaSuccess => Ok(is_locked),
-            _ => Err(result),
-        }
+    fn configuration_is_locked(&self) -> bool {
+        self.config_zone_locked
     } // AteccDevice::configuration_is_locked()
 
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
     /// Trait implementation
     fn data_zone_is_locked(&self) -> bool {
-        matches!(self.is_data_zone_locked, Some(true))
+        self.data_zone_locked
     } // AteccDevice::data_zone_is_locked()
 
     /// Request ATECC to read and return own configuration zone.
@@ -520,19 +546,66 @@ impl super::AteccDeviceTrait for AteccDevice {
         }
     } // AteccDevice::info_cmd()
 
+    fn set_write_encryption_key(&self, encryption_key: &[u8]) -> AtcaStatus {
+        if encryption_key.len() != ATCA_KEY_SIZE {
+            return AtcaStatus::AtcaInvalidSize;
+        }
+        let mut write_key_obj = self
+            .write_encryption_key
+            .lock()
+            .expect("Could not lock 'write_encryption_key' mutex");
+        let mut key_arr: [u8; ATCA_KEY_SIZE] = [0; ATCA_KEY_SIZE];
+        key_arr.copy_from_slice(&encryption_key[0..]);
+        *write_key_obj = Cell::new(key_arr);
+        AtcaStatus::AtcaSuccess
+    } // AteccDevice::set_write_encryption_key()
+
+    /// Get serial number of the ATECC device
+    /// Trait implementation
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
         self.serial_number
-    }
+    } // AteccDevice::get_serial_number()
 
+    /// Checks if the chip supports AES encryption
+    /// (only relevant for the ATECC608x chip)
+    /// Trait implementation
     fn is_aes_enabled(&self) -> bool {
-        self.aes_enabled
-    }
+        self.chip_options.aes_enabled
+    } // AteccDevice::is_aes_enabled()
+
+    /// Checks if the chip supports AES for KDF operations
+    /// (only relevant for the ATECC608x chip)
+    /// Trait implementation
+    fn is_kdf_aes_enabled(&self) -> bool {
+        self.chip_options.kdf_aes_enabled
+    } // AteccDevice::is_kdf_aes_enabled()
+
+    /// Checks whether transmission between chip and host is to be encrypted
+    /// (IO encryption is only possible for ATECC608x chip)
+    /// Trait implementation
+    fn is_io_protection_key_enabled(&self) -> bool {
+        self.chip_options.io_key_enabled
+    } // AteccDevice::is_io_protection_key_enabled()
+
+    ///
+    /// (only relevant for the ATECC608x chip)
+    /// Trait implementation
+    fn get_ecdh_output_protection_state(&self) -> OutputProtectionState {
+        self.chip_options.ecdh_output_protection
+    } // AteccDevice::get_ecdh_output_protection_state()
+
+    ///
+    /// (only relevant for the ATECC608x chip)
+    /// Trait implementation
+    fn get_kdf_output_protection_state(&self) -> OutputProtectionState {
+        self.chip_options.kdf_output_protection
+    } // AteccDevice::get_kdf_output_protection_state()
 
     /// ATECC device instance destructor
     /// Trait implementation
     fn release(&self) -> AtcaStatus {
         self.release()
-    }
+    } // AteccDevice::release()
 }
 
 /// Implementation of CryptoAuth Library API Rust wrapper calls
@@ -592,14 +665,6 @@ impl AteccDevice {
             }
         };
 
-        atecc_device.aes_enabled = match atecc_device.get_aes_status_from_chip() {
-            Ok(val) => val,
-            Err(err) => {
-                atecc_device.release();
-                return Err(err.to_string());
-            }
-        };
-
         atecc_device.slots = {
             let mut atca_slots = Vec::new();
             let err = atecc_device.get_config_from_chip(&mut atca_slots);
@@ -612,13 +677,60 @@ impl AteccDevice {
             }
         };
 
-        atecc_device.is_data_zone_locked = {
-            let mut is_locked = false;
-            match atecc_device.is_locked(ATCA_LOCK_ZONE_DATA, &mut is_locked) {
-                AtcaStatus::AtcaSuccess => Some(is_locked),
-                _ => None,
+        atecc_device.config_zone_locked = {
+            let mut is_locked: bool = false;
+            let err = atecc_device.is_locked(ATCA_LOCK_ZONE_CONFIG, &mut is_locked);
+            match err {
+                AtcaStatus::AtcaSuccess => is_locked,
+                _ => {
+                    atecc_device.release();
+                    return Err(err.to_string());
+                }
             }
         };
+
+        atecc_device.data_zone_locked = {
+            let mut is_locked: bool = false;
+            let err = atecc_device.is_locked(ATCA_LOCK_ZONE_DATA, &mut is_locked);
+            match err {
+                AtcaStatus::AtcaSuccess => is_locked,
+                _ => {
+                    atecc_device.release();
+                    return Err(err.to_string());
+                }
+            }
+        };
+
+        atecc_device.chip_options = {
+            match atecc_device.get_chip_options_data_from_chip() {
+                Ok(val) => val,
+                Err(err) => {
+                    atecc_device.release();
+                    return Err(err.to_string());
+                }
+            }
+        };
+
+        let chip_type = atecc_device.get_device_type();
+        let err_str = "\n\n\u{001b}[1m\u{001b}[33mcheck if 'device_type' is correct in \
+        'config.toml' file, because chip on the bus seems to be";
+        if atecc_device.chip_options.aes_enabled && (chip_type != super::AtcaDeviceType::ATECC608A)
+        {
+            atecc_device.release();
+            return Err(format!(
+                "{} type ATECC608x,\nand you have chosen \u{001b}[31m{}\u{001b}[33m !\u{001b}[0m\n\n",
+                err_str.to_string(),
+                chip_type.to_string()
+            ));
+        }
+        if !atecc_device.chip_options.aes_enabled && (chip_type == super::AtcaDeviceType::ATECC608A)
+        {
+            atecc_device.release();
+            return Err(format!(
+                "{} of a different type than the \u{001b}[31mATECC608x\u{001b}[33m you selected !\u{001b}[0m\n\n",
+                err_str.to_string()
+            ));
+        }
 
         Ok(atecc_device)
     } // AteccDevice::new()
@@ -684,13 +796,25 @@ impl AteccDevice {
         }
         // First condition is a special situation when
         // an AES key can be generated in an ATECC TempKey slot.
-        if ((slot_number == ATCA_ATECC_SLOTS_COUNT) & (key_type != KeyType::Aes))
-            | ((key_type == KeyType::Aes) & !self.aes_enabled)
+        if ((slot_number == ATCA_ATECC_SLOTS_COUNT) && (key_type != KeyType::Aes))
+            || ((key_type == KeyType::Aes) && !self.chip_options.aes_enabled)
+            || ((slot_number < ATCA_ATECC_SLOTS_COUNT)
+                && (key_type != self.slots[slot_number as usize].config.key_type))
         {
             return Err(AtcaStatus::AtcaBadParam);
         }
         Ok(())
     } // AteccDevice::check_input_parameters()
+
+    /// A helper function that checks locking of configuration and data zones on the ATECC chip.
+    #[inline]
+    fn check_that_configuration_is_not_locked(&self, both: bool) -> bool {
+        let mut result: bool = false;
+        if (!self.data_zone_locked && both) || !self.config_zone_locked {
+            result = true
+        }
+        result
+    } // AteccDevice::check_that_configuration_is_not_locked()
 
     /// A function that reads the configuration zone to check if the specified zone is locked
     fn is_locked(&self, zone: u8, is_locked: *mut bool) -> AtcaStatus {
@@ -716,6 +840,43 @@ impl AteccDevice {
             AtcaStatus::AtcaSuccess => Ok((data[INDEX_OF_AES_BYTE] & 1) != 0),
             _ => Err(read_status),
         }
+    } // AteccDevice::get_aes_status_from_chip()
+
+    /// A function that retrieves data about options supported by the ATECC chip
+    fn get_chip_options_data_from_chip(&self) -> Result<ChipOptions, AtcaStatus> {
+        const LEN: u8 = 4;
+        const OFFSET: u8 = 22;
+        const FIRST_DATA_BYTE: usize = 2;
+        const SECOND_DATA_BYTE: usize = 3;
+        const IO_KEY_EN_POS: u8 = 1;
+        const KDF_AES_EN_POS: u8 = 2;
+
+        let mut data: Vec<u8> = vec![0; LEN as usize];
+        let mut chip_options: ChipOptions = Default::default();
+        let read_status = self.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET, &mut data, LEN);
+
+        match read_status {
+            AtcaStatus::AtcaSuccess => {
+                chip_options.io_key_enabled =
+                    atcab_get_bit_value(data[FIRST_DATA_BYTE], IO_KEY_EN_POS);
+                chip_options.io_key_in_slot = (data[SECOND_DATA_BYTE] >> 4) & 0b00001111;
+                chip_options.kdf_aes_enabled =
+                    atcab_get_bit_value(data[FIRST_DATA_BYTE], KDF_AES_EN_POS);
+                chip_options.ecdh_output_protection = (data[SECOND_DATA_BYTE] & 0b00000011).into();
+                chip_options.kdf_output_protection =
+                    ((data[SECOND_DATA_BYTE] >> 2) & 0b00000011).into();
+            }
+            _ => return Err(read_status),
+        }
+
+        match self.get_aes_status_from_chip() {
+            Ok(val) => chip_options.aes_enabled = val,
+            Err(err) => {
+                return Err(err);
+            }
+        }
+
+        Ok(chip_options)
     } // AteccDevice::get_aes_status_from_chip()
 
     /// Request ATECC to read the configuration zone data and return it in a structure

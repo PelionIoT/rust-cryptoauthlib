@@ -19,6 +19,7 @@ pub const ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY: u8 = 8;
 pub const ATCA_SERIAL_NUM_SIZE: usize = cryptoauthlib_sys::ATCA_SERIAL_NUM_SIZE as usize;
 /// ATECC/ATSHA temporary key slot identifier
 pub const ATCA_ATECC_TEMPKEY_KEYID: u16 = cryptoauthlib_sys::ATCA_TEMPKEY_KEYID as u16;
+pub const ATCA_KEY_SIZE: usize = cryptoauthlib_sys::ATCA_KEY_SIZE as usize;
 /// Size (in bytes) of AES key
 pub const ATCA_AES_KEY_SIZE: usize = cryptoauthlib_sys::AES_DATA_SIZE as usize;
 /// Size (in bytes) of SHA hash

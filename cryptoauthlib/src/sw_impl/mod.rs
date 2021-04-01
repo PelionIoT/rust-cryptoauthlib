@@ -3,8 +3,8 @@ use rand::{distributions::Standard, Rng};
 #[allow(unused_imports, deprecated)]
 use super::{
     AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, ReadKey, SignEcdsaParam,
-    SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState,
+    ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
 };
 use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 
@@ -36,8 +36,9 @@ impl super::AteccDeviceTrait for AteccDevice {
         rand_out.resize(ATCA_RANDOM_BUFFER_SIZE, 0u8);
         rand_out.copy_from_slice(&vector);
         match self.dev_type {
-            AtcaDeviceType::AtcaTestDevFailUnimplemented 
-            | AtcaDeviceType::AtcaTestDevSuccess => AtcaStatus::AtcaSuccess,
+            AtcaDeviceType::AtcaTestDevFailUnimplemented | AtcaDeviceType::AtcaTestDevSuccess => {
+                AtcaStatus::AtcaSuccess
+            }
             _ => AtcaStatus::AtcaUnimplemented,
         }
     }
@@ -92,11 +93,12 @@ impl super::AteccDeviceTrait for AteccDevice {
     }
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn configuration_is_locked(&self) -> Result<bool, AtcaStatus> {
+    fn configuration_is_locked(&self) -> bool {
         match self.dev_type {
-            AtcaDeviceType::AtcaTestDevSuccess
-            | AtcaDeviceType::AtcaTestDevFailUnimplemented => Ok(true),
-            _ => Err(self.default_dev_status()),
+            AtcaDeviceType::AtcaTestDevFailUnimplemented | AtcaDeviceType::AtcaTestDevSuccess => {
+                true
+            }
+            _ => false,
         }
     }
     /// Request ATECC to check if its Data Zone is locked.
@@ -119,8 +121,9 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// during initialization of the AteccDevice object.
     fn get_config(&self, _atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus {
         match self.dev_type {
-            AtcaDeviceType::AtcaTestDevSuccess
-            | AtcaDeviceType::AtcaTestDevFailUnimplemented => AtcaStatus::AtcaSuccess,
+            AtcaDeviceType::AtcaTestDevSuccess | AtcaDeviceType::AtcaTestDevFailUnimplemented => {
+                AtcaStatus::AtcaSuccess
+            }
             _ => AtcaStatus::AtcaUnimplemented,
         }
     }
@@ -146,6 +149,10 @@ impl super::AteccDeviceTrait for AteccDevice {
         }
     }
 
+    fn set_write_encryption_key(&self, _encryption_key: &[u8]) -> AtcaStatus {
+        self.default_dev_status()
+    }
+
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
         let mut serial_number = [0; ATCA_SERIAL_NUM_SIZE];
         if AtcaDeviceType::AtcaTestDevSuccess == self.dev_type {
@@ -160,11 +167,28 @@ impl super::AteccDeviceTrait for AteccDevice {
         matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
     }
 
+    fn is_kdf_aes_enabled(&self) -> bool {
+        matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
+    }
+
+    fn is_io_protection_key_enabled(&self) -> bool {
+        matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
+    }
+
+    fn get_ecdh_output_protection_state(&self) -> OutputProtectionState {
+        OutputProtectionState::ClearTextAllowed
+    }
+
+    fn get_kdf_output_protection_state(&self) -> OutputProtectionState {
+        OutputProtectionState::ClearTextAllowed
+    }
+
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus {
         match self.dev_type {
-            AtcaDeviceType::AtcaTestDevFailUnimplemented 
-            | AtcaDeviceType::AtcaTestDevSuccess => AtcaStatus::AtcaSuccess,
+            AtcaDeviceType::AtcaTestDevFailUnimplemented | AtcaDeviceType::AtcaTestDevSuccess => {
+                AtcaStatus::AtcaSuccess
+            }
             _ => AtcaStatus::AtcaUnimplemented,
         }
     }
@@ -186,7 +210,9 @@ impl AteccDevice {
         device.dev_type = match r_iface_cfg.devtype {
             AtcaDeviceType::AtcaTestDevFail => AtcaDeviceType::AtcaTestDevFail,
             AtcaDeviceType::AtcaTestDevSuccess => AtcaDeviceType::AtcaTestDevSuccess,
-            AtcaDeviceType::AtcaTestDevFailUnimplemented => AtcaDeviceType::AtcaTestDevFailUnimplemented,
+            AtcaDeviceType::AtcaTestDevFailUnimplemented => {
+                AtcaDeviceType::AtcaTestDevFailUnimplemented
+            }
             _ => {
                 let err = format!(
                     "Software implementation of an AteccDevice does not support interface {}",

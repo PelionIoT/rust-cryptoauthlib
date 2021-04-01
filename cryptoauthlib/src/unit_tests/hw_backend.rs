@@ -72,7 +72,7 @@ fn iface_setup(config_file: String) -> Result<super::AtcaIfaceCfg, String> {
 /// # Arguments
 /// * 'data_zone_must_be_locked == true' prevents further calls if data zone is not locked
 /// * 'data_zone_must_be_locked == false' allows further calls even if data zone is not locked
-pub fn test_setup(data_zone_must_be_locked: bool) -> super::AteccDevice {
+pub fn test_setup() -> super::AteccDevice {
     let result_iface_cfg = iface_setup("config.toml".to_owned());
     assert_eq!(result_iface_cfg.is_ok(), true);
 
@@ -80,20 +80,12 @@ pub fn test_setup(data_zone_must_be_locked: bool) -> super::AteccDevice {
     assert_eq!(iface_cfg.iface_type.to_string(), "AtcaI2cIface");
 
     let result = super::setup_atecc_device(iface_cfg);
-    assert_eq!(result.is_ok(), true);
+    match result {
+        Ok(_) => (),
+        Err(err) => panic!("{}", err),
+    };
 
-    let device = result.unwrap();
-
-    let is_locked = device.data_zone_is_locked();
-    if data_zone_must_be_locked {
-        // Prevent further calls when data zone is not locked
-        if !is_locked {
-            device.release();
-            assert_eq!(is_locked, true);
-        }
-    }
-
-    device
+    result.unwrap()
 }
 
 // test_teardown() is not needed, it is a one-liner and if it fails, then
@@ -103,22 +95,14 @@ pub fn test_setup(data_zone_must_be_locked: bool) -> super::AteccDevice {
 #[serial]
 fn new() {
     const SLOTS_COUNT: usize = super::ATCA_ATECC_SLOTS_COUNT as usize;
-    let device = test_setup(false);
-    let mut aes_should_be_enabled = false;
-    let mut call_result = super::AtcaStatus::AtcaSuccess;
-
-    match is_chip_version_608(&device) {
-        Ok(val) => aes_should_be_enabled = val,
-        Err(err) => call_result = err,
-    }
+    let device = test_setup();
 
     let serial_number = device.get_serial_number();
     let mut slots = Vec::new();
     let get_config = device.get_config(&mut slots);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
-    assert_eq!(call_result.to_string(), "AtcaSuccess");
-    assert_eq!(aes_should_be_enabled, device.is_aes_enabled());
+
     assert_eq!(serial_number[0], 0x01);
     assert_eq!(serial_number[1], 0x23);
     assert_eq!(get_config.to_string(), "AtcaSuccess");
@@ -132,26 +116,34 @@ fn new() {
 #[test]
 #[serial]
 fn sha() {
-    let device = test_setup(false);
+    let device = test_setup();
 
     let test_message = "TestMessage";
     let test_message_hash = [
-        4, 107, 166, 242, 219, 151, 158, 146, 86, 241, 25, 188, 21, 209, 126, 62, 168, 136, 241,
-        235, 157, 226, 70, 49, 81, 80, 208, 170, 247, 231, 0, 115,
+        0x04, 0x6B, 0xA6, 0xF2, 0xDB, 0x97, 0x9E, 0x92, 0x56, 0xF1, 0x19, 0xBC, 0x15, 0xD1, 0x7E,
+        0x3E, 0xA8, 0x88, 0xF1, 0xEB, 0x9D, 0xE2, 0x46, 0x31, 0x51, 0x50, 0xD0, 0xAA, 0xF7, 0xE7,
+        0x00, 0x73,
     ];
     let message = test_message.as_bytes().to_vec();
     let mut digest: Vec<u8> = Vec::new();
     let device_sha = device.sha(message, &mut digest);
 
+    let mut expected = super::AtcaStatus::AtcaSuccess;
+    if !device.configuration_is_locked() {
+        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        expected = super::AtcaStatus::AtcaNotLocked;
+    } else {
+        assert_eq!(digest, test_message_hash);
+    };
     assert_eq!(device.release().to_string(), "AtcaSuccess");
-    assert_eq!(device_sha.to_string(), "AtcaSuccess");
-    assert_eq!(digest, test_message_hash);
+
+    assert_eq!(device_sha, expected);
 }
 
 #[test]
 #[serial]
 fn nonce() {
-    let device = test_setup(false);
+    let device = test_setup();
 
     let nonce_64 = [
         0x41, 0xDA, 0xC9, 0xA1, 0x4B, 0x4F, 0xAE, 0xAE, 0x7D, 0xD5, 0x97, 0xD2, 0xA6, 0x78, 0x81,
@@ -177,17 +169,18 @@ fn nonce() {
     let nonce_64_ok = device.nonce(super::NonceTarget::MsgDigBuf, &nonce_64);
     let nonce_bad = device.nonce(super::NonceTarget::TempKey, &nonce_too_small);
 
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(nonce_32_ok.to_string(), "AtcaSuccess");
     assert_eq!(nonce_64_ok, expected);
     assert_eq!(nonce_bad.to_string(), "AtcaBadParam");
     assert_eq!(check_ver_result.to_string(), "AtcaSuccess");
-    assert_eq!(device.release().to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn nonce_rand() {
-    let device = test_setup(false);
+    let device = test_setup();
 
     let nonce = [
         0x41, 0xDA, 0xC9, 0xA1, 0x4B, 0x4F, 0xAE, 0xAE, 0x7D, 0xD5, 0x97, 0xD2, 0xA6, 0x78, 0x81,
@@ -199,19 +192,20 @@ fn nonce_rand() {
     let nonce_ok = device.nonce_rand(&nonce, &mut rand_out);
     let nonce_bad = device.nonce_rand(&nonce_too_small, &mut rand_out);
 
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
     assert_eq!(nonce_ok.to_string(), "AtcaSuccess");
     assert_eq!(nonce_bad.to_string(), "AtcaInvalidSize");
-    assert_eq!(device.release().to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn gen_key() {
-    let device = test_setup(true);
-    println!("After test_setup()");
+    let device = test_setup();
+
     let mut check_ver_result: super::AtcaStatus = super::AtcaStatus::AtcaSuccess;
-    let expected = match is_chip_version_608(&device) {
+    let mut expected_device_gen_key_bad_2 = match is_chip_version_608(&device) {
         Ok(true) => super::AtcaStatus::AtcaSuccess,
         Ok(false) => super::AtcaStatus::AtcaBadParam,
         Err(err) => {
@@ -220,6 +214,18 @@ fn gen_key() {
         }
     };
 
+    let mut expected_device_gen_key_bad_1 = super::AtcaStatus::AtcaInvalidId;
+    let mut expected_device_gen_key_bad_3 = super::AtcaStatus::AtcaBadParam;
+    let mut expected_device_gen_key_bad_4 = super::AtcaStatus::AtcaBadParam;
+    let mut expected_device_gen_key_ok_1 = super::AtcaStatus::AtcaSuccess;
+    if !device.configuration_is_locked() {
+        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        expected_device_gen_key_bad_1 = super::AtcaStatus::AtcaNotLocked;
+        expected_device_gen_key_bad_2 = super::AtcaStatus::AtcaNotLocked;
+        expected_device_gen_key_bad_3 = super::AtcaStatus::AtcaNotLocked;
+        expected_device_gen_key_bad_4 = super::AtcaStatus::AtcaNotLocked;
+        expected_device_gen_key_ok_1 = super::AtcaStatus::AtcaNotLocked;
+    }
     let device_gen_key_bad_1 =
         device.gen_key(super::KeyType::Aes, super::ATCA_ATECC_SLOTS_COUNT + 1);
     let device_gen_key_bad_2 = device.gen_key(super::KeyType::Aes, 9);
@@ -228,19 +234,22 @@ fn gen_key() {
     let device_gen_key_bad_4 = device.gen_key(super::KeyType::ShaOrText, 0);
     let device_gen_key_ok_1 = device.gen_key(super::KeyType::P256EccKey, 0);
 
+    let _expected_device_gen_key_bad_1 = super::AtcaStatus::AtcaInvalidId;
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(check_ver_result.to_string(), "AtcaSuccess");
-    assert_eq!(device_gen_key_bad_1.to_string(), "AtcaInvalidId");
-    assert_eq!(device_gen_key_bad_2, expected);
-    assert_eq!(device_gen_key_bad_3.to_string(), "AtcaBadParam");
-    assert_eq!(device_gen_key_bad_4.to_string(), "AtcaBadParam");
-    assert_eq!(device_gen_key_ok_1.to_string(), "AtcaSuccess");
+    assert_eq!(device_gen_key_bad_1, expected_device_gen_key_bad_1);
+    assert_eq!(device_gen_key_bad_2, expected_device_gen_key_bad_2);
+    assert_eq!(device_gen_key_bad_3, expected_device_gen_key_bad_3);
+    assert_eq!(device_gen_key_bad_4, expected_device_gen_key_bad_4);
+    assert_eq!(device_gen_key_ok_1, expected_device_gen_key_ok_1);
 }
 
 #[test]
 #[serial]
 fn import_key() {
-    let device = test_setup(true);
+    let device = test_setup();
 
     let priv_key = [
         0xF5, 0xDB, 0x6B, 0xA1, 0x82, 0x22, 0xCE, 0xC1, 0x54, 0x53, 0xE5, 0x63, 0xDE, 0xC5, 0xC7,
@@ -254,50 +263,103 @@ fn import_key() {
         0x00, 0xC5, 0x5C, 0x17, 0x73, 0x5A, 0x92, 0x4B, 0xB3, 0x9F, 0xE4, 0x98, 0x52, 0x62, 0xA5,
         0x36, 0xC5, 0x00, 0x9C,
     ];
+    let write_key = [
+        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
+        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
+        0x66, 0x45,
+    ];
     let priv_key_bad = &priv_key[0..=25];
     let pub_key_bad = &pub_key[0..=60];
-    // let aes_key = &priv_key[0..=15];
-    // let aes_key_bad = &priv_key[0..=10];
+    let aes_key = &priv_key[0..=15];
+    let aes_key_bad = &priv_key[0..=10];
 
-    // let priv_key_ok = device.import_key(super::KeyType::P256EccKey, &priv_key, 0x00);
-    let priv_key_bad_1 = device.import_key(super::KeyType::P256EccKey, &priv_key_bad, 0x00);
-    let priv_key_bad_2 = device.import_key(super::KeyType::P256EccKey, &priv_key, 0x05);
+    let write_key_set_success = device.set_write_encryption_key(&write_key);
+    assert_eq!(write_key_set_success.to_string(), "AtcaSuccess");
+    if write_key_set_success == super::AtcaStatus::AtcaSuccess {
+        let priv_key_ok = device.import_key(super::KeyType::P256EccKey, &priv_key, 0x02);
+        let priv_key_bad_1 = device.import_key(super::KeyType::P256EccKey, &priv_key_bad, 0x00);
+        let priv_key_bad_2 = device.import_key(super::KeyType::P256EccKey, &priv_key, 0x01);
 
-    let pub_key_ok = device.import_key(super::KeyType::P256EccKey, &pub_key, 0x0F);
-    let pub_key_bad_1 = device.import_key(super::KeyType::P256EccKey, &pub_key_bad, 0x0F);
-    let pub_key_bad_2 = device.import_key(super::KeyType::P256EccKey, &pub_key, 0x04);
+        let pub_key_ok = device.import_key(super::KeyType::P256EccKey, &pub_key, 0x0B);
+        let pub_key_bad_1 = device.import_key(super::KeyType::P256EccKey, &pub_key_bad, 0x0B);
+        // slot number too low
+        let pub_key_bad_2 = device.import_key(super::KeyType::P256EccKey, &pub_key, 0x03);
+        // writing to a slot with a key type other than P256
+        let pub_key_bad_3 = device.import_key(super::KeyType::P256EccKey, &pub_key, 0x0C);
+
+        let mut expected_priv_key_ok = super::AtcaStatus::AtcaSuccess;
+        let mut expected_priv_key_bad_1 = super::AtcaStatus::AtcaInvalidSize;
+        let mut expected_priv_key_bad_2 = super::AtcaStatus::AtcaBadParam;
+        let mut expected_pub_key_ok = super::AtcaStatus::AtcaSuccess;
+        let mut expected_pub_key_bad_1 = super::AtcaStatus::AtcaInvalidSize;
+        let mut expected_pub_key_bad_2 = super::AtcaStatus::AtcaInvalidId;
+        let mut expected_pub_key_bad_3 = super::AtcaStatus::AtcaBadParam;
+        if !(device.configuration_is_locked() && device.data_zone_is_locked()) {
+            println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+            expected_priv_key_ok = super::AtcaStatus::AtcaNotLocked;
+            expected_priv_key_bad_1 = super::AtcaStatus::AtcaNotLocked;
+            expected_priv_key_bad_2 = super::AtcaStatus::AtcaNotLocked;
+
+            expected_pub_key_ok = super::AtcaStatus::AtcaNotLocked;
+            expected_pub_key_bad_1 = super::AtcaStatus::AtcaNotLocked;
+            expected_pub_key_bad_2 = super::AtcaStatus::AtcaNotLocked;
+            expected_pub_key_bad_3 = super::AtcaStatus::AtcaNotLocked;
+        }
+
+        assert_eq!(priv_key_ok, expected_priv_key_ok);
+        assert_eq!(priv_key_bad_1, expected_priv_key_bad_1);
+        assert_eq!(priv_key_bad_2, expected_priv_key_bad_2);
+
+        assert_eq!(pub_key_ok, expected_pub_key_ok);
+        assert_eq!(pub_key_bad_1, expected_pub_key_bad_1);
+        assert_eq!(pub_key_bad_2, expected_pub_key_bad_2);
+        assert_eq!(pub_key_bad_3, expected_pub_key_bad_3);
+    }
 
     // TODO AES keys check
+    match is_chip_version_608(&device) {
+        Ok(true) => {
+            let aes_key_ok = device.import_key(super::KeyType::Aes, &aes_key, 0x09);
+            let aes_key_bad_1 = device.import_key(super::KeyType::Aes, &aes_key_bad, 0x09);
 
-    // assert_eq!(priv_key_ok.to_string(), "AtcaSuccess");
-    assert_eq!(priv_key_bad_1.to_string(), "AtcaInvalidSize");
-    assert_eq!(priv_key_bad_2.to_string(), "AtcaBadParam");
+            assert_eq!(aes_key_ok.to_string(), "AtcaSuccess");
+            assert_eq!(aes_key_bad_1.to_string(), "AtcaInvalidSize");
+        }
+        Ok(false) => (),
+        Err(err) => panic!("is_chip_version_608() error: {}", err.to_string()),
+    }
 
-    assert_eq!(pub_key_ok.to_string(), "AtcaSuccess");
-    assert_eq!(pub_key_bad_1.to_string(), "AtcaInvalidSize");
-    assert_eq!(pub_key_bad_2.to_string(), "AtcaInvalidId");
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 }
 
 #[test]
 #[serial]
 fn get_pubkey() {
-    let device = test_setup(true);
+    let device = test_setup();
+
     let mut public_key: Vec<u8> = Vec::new();
 
     let result = device.get_public_key(0x00, &mut public_key);
     let sum: u16 = public_key.iter().fold(0, |s, &x| s + x as u16);
 
-    assert_eq!(result.to_string(), "AtcaSuccess");
-    assert_eq!(public_key.len(), super::ATCA_ATECC_PUB_KEY_SIZE);
-    assert_ne!(sum, 0);
+    let mut expected = super::AtcaStatus::AtcaSuccess;
+    if !device.configuration_is_locked() {
+        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        expected = super::AtcaStatus::AtcaNotLocked;
+    } else {
+        assert_eq!(public_key.len(), super::ATCA_ATECC_PUB_KEY_SIZE);
+        assert_ne!(sum, 0);
+    }
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(result, expected);
 }
 
 #[test]
 #[serial]
 fn sign_verify_hash() {
-    let device = test_setup(true);
+    let device = test_setup();
 
     let hash: Vec<u8> = vec![0xA5; 32];
     let internal_sig = super::SignEcdsaParam {
@@ -328,22 +390,39 @@ fn sign_verify_hash() {
         Ok(val) => is_verified = val,
     };
 
-    assert_eq!(signature.len(), super::ATCA_SIG_SIZE);
-    assert_eq!(sign_internal.to_string(), "AtcaUnimplemented");
-    assert_eq!(verify_external_result.to_string(), "AtcaUnimplemented");
-
-    assert_eq!(sign_external.to_string(), "AtcaSuccess");
-    assert_eq!(get_pub_key_result.to_string(), "AtcaSuccess");
-    assert_eq!(verify_internal_result.to_string(), "AtcaSuccess");
-    assert_eq!(is_verified, true);
+    let mut expected_sign_internal = super::AtcaStatus::AtcaUnimplemented;
+    let mut expected_verify_external_result = super::AtcaStatus::AtcaUnimplemented;
+    let mut expected_sign_external = super::AtcaStatus::AtcaSuccess;
+    let mut expected_get_pub_key_result = super::AtcaStatus::AtcaSuccess;
+    let mut expected_verify_internal_result = super::AtcaStatus::AtcaSuccess;
+    if !device.configuration_is_locked() {
+        expected_get_pub_key_result = super::AtcaStatus::AtcaNotLocked;
+    }
+    if !(device.configuration_is_locked() && device.data_zone_is_locked()) {
+        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        expected_sign_internal = super::AtcaStatus::AtcaNotLocked;
+        expected_verify_external_result = super::AtcaStatus::AtcaNotLocked;
+        expected_sign_external = super::AtcaStatus::AtcaNotLocked;
+        expected_verify_internal_result = super::AtcaStatus::AtcaNotLocked;
+    } else {
+        assert_eq!(signature.len(), super::ATCA_SIG_SIZE);
+        assert_eq!(is_verified, true);
+    }
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(sign_internal, expected_sign_internal);
+    assert_eq!(verify_external_result, expected_verify_external_result);
+
+    assert_eq!(sign_external, expected_sign_external);
+    assert_eq!(get_pub_key_result, expected_get_pub_key_result);
+    assert_eq!(verify_internal_result, expected_verify_internal_result);
 }
 
 #[test]
 #[serial]
 fn cmp_config_zone() {
-    let device = test_setup(false);
+    let device = test_setup();
 
     let mut config_data = Vec::new();
     let device_read_config_zone = device.read_config_zone(&mut config_data);
@@ -351,6 +430,7 @@ fn cmp_config_zone() {
     let device_cmp_config_zone = device.cmp_config_zone(&mut config_data, &mut same_config);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(device_read_config_zone.to_string(), "AtcaSuccess");
     assert_eq!(device_cmp_config_zone.to_string(), "AtcaSuccess");
     assert_eq!(same_config, true);
@@ -359,27 +439,22 @@ fn cmp_config_zone() {
 #[test]
 #[serial]
 fn configuration_is_locked() {
-    let device = test_setup(false);
-    let mut is_locked = false;
-    let mut is_locked_check_result = super::AtcaStatus::AtcaSuccess;
-
-    match device.configuration_is_locked() {
-        Ok(val) => is_locked = val,
-        Err(err) => is_locked_check_result = err,
-    };
+    let device = test_setup();
+    let is_locked = device.configuration_is_locked();
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
-    assert_eq!(is_locked_check_result.to_string(), "AtcaSuccess");
+
     assert_eq!(is_locked, true);
 }
 
 #[test]
 #[serial]
 fn data_zone_is_locked() {
-    let device = test_setup(false);
+    let device = test_setup();
     let is_locked = device.data_zone_is_locked();
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(is_locked, true);
 }
 
@@ -387,7 +462,7 @@ fn data_zone_is_locked() {
 #[serial]
 fn get_config_from_config_zone() {
     let mut config_data = Vec::new();
-    let device = test_setup(false);
+    let device = test_setup();
     let device_atcab_read_config_zone = device.read_config_zone(&mut config_data);
 
     config_data[88] = 0b10111111;
@@ -398,6 +473,7 @@ fn get_config_from_config_zone() {
     super::hw_impl::atcab_get_config_from_config_zone(&config_data, &mut slots);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(device_atcab_read_config_zone.to_string(), "AtcaSuccess");
     assert_eq!(slots.len(), usize::from(super::ATCA_ATECC_SLOTS_COUNT));
     assert_eq!(slots[0].id, 0);
@@ -412,10 +488,12 @@ fn get_config_from_config_zone() {
 #[test]
 #[serial]
 fn get_config() {
-    let device = test_setup(false);
+    let device = test_setup();
     let mut slots: Vec<super::AtcaSlot> = Vec::new();
     let get_config = device.get_config(&mut slots);
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(get_config.to_string(), "AtcaSuccess");
     assert_eq!(slots.len(), super::ATCA_ATECC_SLOTS_COUNT as usize);
 }
@@ -423,7 +501,7 @@ fn get_config() {
 #[test]
 #[serial]
 fn info_cmd() {
-    let device = test_setup(false);
+    let device = test_setup();
     let mut result_key_valid = super::AtcaStatus::AtcaSuccess;
     let mut result_revision = super::AtcaStatus::AtcaSuccess;
     let mut revision: Vec<u8> = Vec::new();
@@ -438,8 +516,9 @@ fn info_cmd() {
         Err(err) => result_revision = err,
     }
 
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
     assert_eq!(result_key_valid.to_string(), "AtcaUnimplemented");
     assert_eq!(revision.len(), 4);
     assert_eq!(result_revision.to_string(), "AtcaSuccess");
-    assert_eq!(device.release().to_string(), "AtcaSuccess");
 }
