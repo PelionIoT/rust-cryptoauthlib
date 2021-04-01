@@ -14,7 +14,7 @@ git submodule add -b Release/v3.1.x https://github.com/MicrochipTech/cryptoauthl
 The library was locally compiled to investigate what cmake arguments are needed.<br>
 After the above succeeded, the bindings were generated automatically from the build output using following command:
 ~~~
-bindgen cryptoauthlib/lib/cryptoauthlib.h -o src/bindings.rs -- 
+bindgen cryptoauthlib/lib/cryptoauthlib.h -o src/bindings.rs --
     -I ./cryptoauthlib/lib/
     -I ./target/release/build/cryptoauthlib-sys-****************/out/build/lib/
 ~~~

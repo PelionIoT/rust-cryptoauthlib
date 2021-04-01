@@ -83,7 +83,9 @@ pub type AteccDevice = Box<dyn AteccDeviceTrait + Send + Sync>;
 
 pub fn setup_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, String> {
     match r_iface_cfg.devtype {
-        AtcaDeviceType::AtcaTestDevSuccess | AtcaDeviceType::AtcaTestDevFail => {
+        AtcaDeviceType::AtcaTestDevSuccess 
+        | AtcaDeviceType::AtcaTestDevFail 
+        | AtcaDeviceType::AtcaTestDevFailUnimplemented => {
             match sw_impl::AteccDevice::new(r_iface_cfg) {
                 Ok(x) => Ok(Box::new(x)),
                 Err(err) => Err(err),
@@ -96,5 +98,13 @@ pub fn setup_atecc_device(r_iface_cfg: AtcaIfaceCfg) -> Result<AteccDevice, Stri
             Ok(x) => Ok(Box::new(x)),
             Err(err) => Err(err),
         },
+    }
+}
+
+impl AtcaSlot {
+    pub fn is_valid(self) -> bool {
+        // As long as exclusive range is experimental, this should work.
+        // self.id is always greater than 0
+        self.id < ATCA_ATECC_SLOTS_COUNT
     }
 }

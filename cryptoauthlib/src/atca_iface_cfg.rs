@@ -47,8 +47,9 @@ impl AtcaIfaceCfg {
         self.devtype = match devtype.as_str() {
             "atecc608a" => AtcaDeviceType::ATECC608A,
             "atecc508a" => AtcaDeviceType::ATECC508A,
-            "device-fail" => AtcaDeviceType::AtcaTestDevFail,
-            "device-success" => AtcaDeviceType::AtcaTestDevSuccess,
+            "always-fail" => AtcaDeviceType::AtcaTestDevFail,
+            "always-success" => AtcaDeviceType::AtcaTestDevSuccess,
+            "unimplemented-fail" => AtcaDeviceType::AtcaTestDevFailUnimplemented,
             _ => {
                 error!("Unsupported ATCA device type {}", devtype);
                 AtcaDeviceType::AtcaDevUnknown

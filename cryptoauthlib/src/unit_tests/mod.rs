@@ -31,7 +31,7 @@ mod sw_backend;
 fn random() {
     #[cfg(feature = "software-backend")]
     {
-        let device = sw_backend::test_setup("device-success".to_owned());
+        let device = sw_backend::test_setup("always-success".to_owned());
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
 
@@ -41,7 +41,17 @@ fn random() {
     }
     #[cfg(feature = "software-backend")]
     {
-        let device = sw_backend::test_setup("device-fail".to_owned());
+        let device = sw_backend::test_setup("unimplemented-fail".to_owned());
+        let mut rand_out = Vec::new();
+        let device_random = device.random(&mut rand_out);
+
+        assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+        assert_eq!(device.release().to_string(), "AtcaSuccess");
+        assert_eq!(device_random.to_string(), "AtcaSuccess");
+    }
+    #[cfg(feature = "software-backend")]
+    {
+        let device = sw_backend::test_setup("always-fail".to_owned());
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
 
@@ -68,7 +78,7 @@ fn random() {
 #[serial]
 fn read_config_zone() {
     #[cfg(feature = "software-backend")]
-    let device = sw_backend::test_setup("device-success".to_owned());
+    let device = sw_backend::test_setup("always-success".to_owned());
     #[cfg(not(feature = "software-backend"))]
     let device = hw_backend::test_setup(false);
 
