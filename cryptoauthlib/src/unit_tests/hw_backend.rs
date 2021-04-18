@@ -204,6 +204,12 @@ fn nonce_rand() {
 fn gen_key() {
     let device = test_setup();
 
+    let write_key = [
+        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
+        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
+        0x66, 0x45,
+    ];
+
     let mut check_ver_result: super::AtcaStatus = super::AtcaStatus::AtcaSuccess;
     let mut expected_device_gen_key_bad_2 = match is_chip_version_608(&device) {
         Ok(true) => super::AtcaStatus::AtcaSuccess,
@@ -235,6 +241,26 @@ fn gen_key() {
     let device_gen_key_ok_1 = device.gen_key(super::KeyType::P256EccKey, 0);
 
     let _expected_device_gen_key_bad_1 = super::AtcaStatus::AtcaInvalidId;
+
+    match is_chip_version_608(&device) {
+        Ok(true) => {
+            let aes_key_ok_1 = device.gen_key(super::KeyType::Aes, 0x09);
+            assert_eq!(aes_key_ok_1.to_string(), "AtcaSuccess");
+
+            let write_key_set_success = device.set_write_encryption_key(&write_key);
+            assert_eq!(write_key_set_success.to_string(), "AtcaSuccess");
+
+            if write_key_set_success == super::AtcaStatus::AtcaSuccess {
+                let aes_key_ok_2 = device.gen_key(super::KeyType::Aes, 0x04);
+                // let aes_key_bad_1 = device.gen_key(super::KeyType::Aes, &aes_key_bad, 0x09);
+
+                assert_eq!(aes_key_ok_2.to_string(), "AtcaSuccess");
+                // assert_eq!(aes_key_bad_1.to_string(), "AtcaInvalidSize");
+            }
+        }
+        Ok(false) => (),
+        Err(err) => panic!("is_chip_version_608() error: {}", err.to_string()),
+    }
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 

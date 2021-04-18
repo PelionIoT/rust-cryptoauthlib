@@ -153,6 +153,10 @@ impl super::AteccDeviceTrait for AteccDevice {
         self.default_dev_status()
     }
 
+    fn flush_write_encryption_key(&self) -> AtcaStatus {
+        self.default_dev_status()
+    }
+
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE] {
         let mut serial_number = [0; ATCA_SERIAL_NUM_SIZE];
         if AtcaDeviceType::AtcaTestDevSuccess == self.dev_type {

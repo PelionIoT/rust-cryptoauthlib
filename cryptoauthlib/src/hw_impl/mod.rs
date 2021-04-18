@@ -66,7 +66,7 @@ pub struct AteccDevice {
     config_zone_locked: bool,
     data_zone_locked: bool,
     chip_options: ChipOptions,
-    write_encryption_key: Mutex<Cell<[u8; ATCA_KEY_SIZE]>>,
+    write_encryption_key: Mutex<Cell<Option<[u8; ATCA_KEY_SIZE]>>>,
     slots: Vec<AtcaSlot>,
 }
 
@@ -81,7 +81,7 @@ impl Default for AteccDevice {
             config_zone_locked: false,
             data_zone_locked: false,
             chip_options: Default::default(),
-            write_encryption_key: Mutex::new(Cell::new([0; ATCA_KEY_SIZE])),
+            write_encryption_key: Mutex::new(Cell::new(None)),
             slots: Vec::new(),
         }
     }
@@ -223,7 +223,10 @@ impl super::AteccDeviceTrait for AteccDevice {
                             &mut key,
                             ATCA_BLOCK_SIZE as u8,
                         ),
-                        WriteConfig::Encrypt => AtcaStatus::AtcaUnimplemented, // TODO
+                        WriteConfig::Encrypt => {
+                            let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
+                            self.write_slot_with_encryption(slot, BLOCK_IDX, &key, &num_in)
+                        }
                         _ => AtcaStatus::AtcaBadParam,
                     }
                 } else {
@@ -275,31 +278,33 @@ impl super::AteccDeviceTrait for AteccDevice {
                 _ => {
                     let mut temp_key: Vec<u8> = vec![0; 4];
                     temp_key.extend_from_slice(key_data);
-                    let mut write_key: [u8; ATCA_KEY_SIZE] =
-                        self.write_encryption_key.lock().unwrap().get();
-                    let write_key_ptr: *mut u8 = write_key.as_mut_ptr();
-                    let write_key_id: u16 = self.slots[slot as usize].config.write_key as u16;
-                    let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
+                    if let Some(write_key) = self.write_encryption_key.lock().unwrap().get() {
+                        let write_key_ptr: *const u8 = write_key.as_ptr();
+                        let write_key_id: u16 = self.slots[slot as usize].config.write_key as u16;
+                        let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
 
-                    if (self.slots[slot as usize].config.write_config != WriteConfig::Encrypt)
-                        || (self.slots[slot as usize].config.key_type != KeyType::P256EccKey)
-                    {
-                        return AtcaStatus::AtcaBadParam;
+                        if (self.slots[slot as usize].config.write_config != WriteConfig::Encrypt)
+                            || (self.slots[slot as usize].config.key_type != KeyType::P256EccKey)
+                        {
+                            return AtcaStatus::AtcaBadParam;
+                        }
+
+                        return AtcaStatus::from(unsafe {
+                            let _guard = self
+                                .api_mutex
+                                .lock()
+                                .expect("Could not lock atcab API mutex");
+                            cryptoauthlib_sys::atcab_priv_write(
+                                slot,
+                                temp_key.as_ptr(),
+                                write_key_id,
+                                write_key_ptr,
+                                num_in.as_mut_ptr(),
+                            )
+                        });
+                    } else {
+                        AtcaStatus::AtcaBadParam
                     }
-
-                    return AtcaStatus::from(unsafe {
-                        let _guard = self
-                            .api_mutex
-                            .lock()
-                            .expect("Could not lock atcab API mutex");
-                        cryptoauthlib_sys::atcab_priv_write(
-                            slot,
-                            temp_key.as_ptr(),
-                            write_key_id,
-                            write_key_ptr,
-                            num_in.as_mut_ptr(),
-                        )
-                    });
                 }
             },
             KeyType::Aes => {
@@ -323,7 +328,10 @@ impl super::AteccDeviceTrait for AteccDevice {
                             &mut temp_key,
                             ATCA_BLOCK_SIZE as u8,
                         ),
-                        WriteConfig::Encrypt => AtcaStatus::AtcaUnimplemented, // TODO
+                        WriteConfig::Encrypt => {
+                            let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
+                            self.write_slot_with_encryption(slot, BLOCK_IDX, &temp_key, &num_in)
+                        }
                         _ => AtcaStatus::AtcaBadParam,
                     }
                 } else {
@@ -556,9 +564,18 @@ impl super::AteccDeviceTrait for AteccDevice {
             .expect("Could not lock 'write_encryption_key' mutex");
         let mut key_arr: [u8; ATCA_KEY_SIZE] = [0; ATCA_KEY_SIZE];
         key_arr.copy_from_slice(&encryption_key[0..]);
-        *write_key_obj = Cell::new(key_arr);
+        *write_key_obj = Cell::new(Some(key_arr));
         AtcaStatus::AtcaSuccess
     } // AteccDevice::set_write_encryption_key()
+
+    fn flush_write_encryption_key(&self) -> AtcaStatus {
+        let mut write_key_obj = self
+            .write_encryption_key
+            .lock()
+            .expect("Could not lock 'write_encryption_key' mutex");
+        *write_key_obj = Cell::new(None);
+        AtcaStatus::AtcaSuccess
+    } // AteccDevice::flush_write_encryption_key()
 
     /// Get serial number of the ATECC device
     /// Trait implementation
@@ -959,6 +976,43 @@ impl AteccDevice {
             cryptoauthlib_sys::atcab_write_zone(zone, slot, block, offset, data.as_mut_ptr(), len)
         })
     } // AteccDevice::write_zone()
+
+    /// Generic function that writes encrypted data to the chip
+    fn write_slot_with_encryption(
+        &self,
+        slot: u16,
+        block: u8,
+        data: &[u8],
+        num_in: &[u8],
+    ) -> AtcaStatus {
+        if (data.len() != ATCA_BLOCK_SIZE) || (num_in.len() != ATCA_NONCE_NUMIN_SIZE) {
+            return AtcaStatus::AtcaInvalidSize;
+        }
+        if (slot >= ATCA_ATECC_SLOTS_COUNT as u16) || (block > 2) {
+            return AtcaStatus::AtcaInvalidId;
+        }
+        if let Some(write_key) = self.write_encryption_key.lock().unwrap().get() {
+            let write_key_ptr: *const u8 = write_key.as_ptr();
+            let data_ptr: *const u8 = data.as_ptr();
+            let write_key_id: u16 = self.slots[slot as usize].config.write_key as u16;
+            AtcaStatus::from(unsafe {
+                let _guard = self
+                    .api_mutex
+                    .lock()
+                    .expect("Could not lock atcab API mutex");
+                cryptoauthlib_sys::atcab_write_enc(
+                    slot,
+                    block,
+                    data_ptr,
+                    write_key_ptr,
+                    write_key_id,
+                    num_in.as_ptr(),
+                )
+            })
+        } else {
+            AtcaStatus::AtcaBadParam
+        }
+    } // AteccDevice::write_slot_with_encryption()
 }
 
 // ---------------------------------------------------------------

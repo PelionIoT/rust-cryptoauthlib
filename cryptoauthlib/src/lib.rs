@@ -73,8 +73,10 @@ pub trait AteccDeviceTrait {
     ) -> AtcaStatus;
     /// Command accesses some static or dynamic information from the ATECC chip
     fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus>;
-    ///
+    /// A function that sets an encryption key for secure data writes to slots
     fn set_write_encryption_key(&self, encryption_key: &[u8]) -> AtcaStatus;
+    /// Function that resets encryption key for securely writing data to slots
+    fn flush_write_encryption_key(&self) -> AtcaStatus;
     /// Get serial number of the ATECC device
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE];
     /// Checks if the chip supports AES encryption.
@@ -86,10 +88,10 @@ pub trait AteccDeviceTrait {
     /// Checks whether transmission between chip and host is to be encrypted
     /// (IO encryption is only possible for ATECC608x chip)
     fn is_io_protection_key_enabled(&self) -> bool;
-    ///
+    /// Function that reads the read security settings of the ECDH function from chip
     /// (only relevant for the ATECC608x chip)
     fn get_ecdh_output_protection_state(&self) -> OutputProtectionState;
-    ///
+    /// Function that reads the read security settings of the KDF function from chip
     /// (only relevant for the ATECC608x chip)
     fn get_kdf_output_protection_state(&self) -> OutputProtectionState;
     /// ATECC device instance destructor
