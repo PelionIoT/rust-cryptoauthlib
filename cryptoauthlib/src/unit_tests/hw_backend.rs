@@ -548,3 +548,32 @@ fn info_cmd() {
     assert_eq!(revision.len(), 4);
     assert_eq!(result_revision.to_string(), "AtcaSuccess");
 }
+
+#[test]
+#[serial]
+fn gen_key_sign_hash() {
+    let device = test_setup();
+
+    let write_key = [
+        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
+        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
+        0x66, 0x45,
+    ];
+
+    let device_set_write_key = device.set_write_encryption_key(&write_key);
+
+    let mut digest: Vec<u8> = Vec::new();
+    let device_sha = device.sha("Bob wrote this message.".as_bytes().to_vec(), &mut digest);
+
+    let device_gen_key = device.gen_key(super::KeyType::P256EccKey, 0);
+    let mut signature = vec![0u8; super::ATCA_SIG_SIZE];
+
+    let device_sign_hash = device.sign_hash(super::SignMode::External(digest), 0, &mut signature);
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(device_set_write_key.to_string(),"AtcaSuccess");
+    assert_eq!(device_sha.to_string(), "AtcaSuccess");
+    assert_eq!(device_gen_key.to_string(), "AtcaSuccess");
+    assert_eq!(device_sign_hash.to_string(),"AtcaSuccess");
+}
