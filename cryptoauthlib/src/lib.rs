@@ -32,7 +32,13 @@ pub trait AteccDeviceTrait {
     fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus;
     /// Request ATECC to import a cryptographic key
     fn import_key(&self, key_type: KeyType, key_data: &[u8], slot_number: u8) -> AtcaStatus;
-    /// Function to calculate the public key from an existing private key in a slot
+    /// Request ATECC to export a cryptographic key.
+    /// For cryptographic security reasons,
+    /// with KeyType = P256EccKey this function exports only public key
+    fn export_key(&self, key_type: KeyType, key_data: &mut Vec<u8>, slot_number: u8) -> AtcaStatus;
+    /// Depending on the socket configuration, this function calculates
+    /// public key based on an existing private key in the socket
+    /// or exports the public key directly
     fn get_public_key(&self, slot_number: u8, public_key: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to generate an ECDSA signature
     fn sign_hash(&self, mode: SignMode, slot_number: u8, signature: &mut Vec<u8>) -> AtcaStatus;

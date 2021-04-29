@@ -3,13 +3,10 @@ use std::convert::{From, TryFrom};
 use std::ptr;
 use std::sync::Mutex;
 
-// Only temporarily!
-#[allow(unused_imports)]
 use super::{
-    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, ChipOptions, EccKeyAttr, InfoCmdType, KeyType, NonceTarget,
-    OutputProtectionState, ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam,
-    VerifyMode, WriteConfig,
+    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceType, AtcaSlot, AtcaStatus,
+    ChipOptions, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState, ReadKey,
+    SignMode, SlotConfig, VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY,
@@ -342,7 +339,25 @@ impl super::AteccDeviceTrait for AteccDevice {
         }
     } // AteccDevice::import_key()
 
-    /// Function to calculate the public key from an existing private key in a slot
+    /// Request ATECC to export a cryptographic key
+    /// Trait implementation
+    fn export_key(&self, key_type: KeyType, key_data: &mut Vec<u8>, slot_number: u8) -> AtcaStatus {
+        if slot_number > ATCA_ATECC_SLOTS_COUNT {
+            return AtcaStatus::AtcaInvalidId;
+        };
+        match key_type {
+            KeyType::P256EccKey => self.get_public_key(slot_number, key_data),
+            // TODO
+            KeyType::Aes => AtcaStatus::AtcaUnimplemented,
+            // TODO
+            KeyType::ShaOrText => AtcaStatus::AtcaUnimplemented,
+            _ => AtcaStatus::AtcaBadParam,
+        }
+    } // AteccDevice::export_key()
+
+    /// Depending on the socket configuration, this function calculates
+    /// public key based on an existing private key in the socket
+    /// or exports the public key directly
     /// Trait implementation
     fn get_public_key(&self, slot_number: u8, public_key: &mut Vec<u8>) -> AtcaStatus {
         if self.check_that_configuration_is_not_locked(false) {
@@ -352,14 +367,60 @@ impl super::AteccDeviceTrait for AteccDevice {
         if slot_number > ATCA_ATECC_SLOTS_COUNT {
             return AtcaStatus::AtcaInvalidId;
         }
+
+        if self.slots[slot_number as usize].config.key_type != KeyType::P256EccKey {
+            return AtcaStatus::AtcaBadParam;
+        }
         public_key.resize(ATCA_ATECC_PUB_KEY_SIZE, 0);
-        AtcaStatus::from(unsafe {
-            let _guard = self
-                .api_mutex
-                .lock()
-                .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_get_pubkey(slot_number as u16, public_key.as_mut_ptr())
-        })
+
+        if self.slots[slot_number as usize].config.is_secret {
+            if self.slots[slot_number as usize].config.pub_info
+                && self.slots[slot_number as usize]
+                    .config
+                    .ecc_key_attr
+                    .is_private
+            {
+                AtcaStatus::from(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_get_pubkey(slot_number as u16, public_key.as_mut_ptr())
+                })
+            } else if self.slots[slot_number as usize]
+                .config
+                .read_key
+                .encrypt_read
+            {
+                if slot_number < ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY {
+                    AtcaStatus::AtcaInvalidId
+                } else {
+                    // TODO encrypt read
+                    // Question is whether someone will store public key in a slot that requires encrypted access?
+
+                    AtcaStatus::AtcaUnimplemented
+                }
+            } else {
+                AtcaStatus::AtcaBadParam
+            }
+        } else if self.slots[slot_number as usize].config.write_config == WriteConfig::Always {
+            if slot_number < ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY {
+                AtcaStatus::AtcaInvalidId
+            } else {
+                AtcaStatus::from(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_read_pubkey(
+                        slot_number as u16,
+                        public_key.as_mut_ptr(),
+                    )
+                })
+            }
+        } else {
+            AtcaStatus::AtcaBadParam
+        }
     } // AteccDevice::get_public_key()
 
     /// Request ATECC to generate an ECDSA signature

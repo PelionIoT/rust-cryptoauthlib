@@ -572,8 +572,8 @@ fn gen_key_sign_hash() {
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
-    assert_eq!(device_set_write_key.to_string(),"AtcaSuccess");
+    assert_eq!(device_set_write_key.to_string(), "AtcaSuccess");
     assert_eq!(device_sha.to_string(), "AtcaSuccess");
     assert_eq!(device_gen_key.to_string(), "AtcaSuccess");
-    assert_eq!(device_sign_hash.to_string(),"AtcaSuccess");
+    assert_eq!(device_sign_hash.to_string(), "AtcaSuccess");
 }

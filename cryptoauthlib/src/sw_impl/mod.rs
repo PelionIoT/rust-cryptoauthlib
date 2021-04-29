@@ -1,12 +1,9 @@
-use rand::{distributions::Standard, Rng};
-// Only temporarily!
-#[allow(unused_imports, deprecated)]
 use super::{
-    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState,
-    ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus, InfoCmdType, KeyType,
+    OutputProtectionState, SignMode, VerifyMode,
 };
 use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
+use rand::{distributions::Standard, Rng};
 
 pub struct AteccDevice {
     dev_type: AtcaDeviceType,
@@ -67,7 +64,18 @@ impl super::AteccDeviceTrait for AteccDevice {
     fn import_key(&self, _key_type: KeyType, _key_data: &[u8], _slot_number: u8) -> AtcaStatus {
         self.default_dev_status()
     }
-    /// Function to calculate the public key from an existing private key in a slot
+    /// Request ATECC to export a cryptographic key
+    fn export_key(
+        &self,
+        _key_type: KeyType,
+        _key_data: &mut Vec<u8>,
+        _slot_number: u8,
+    ) -> AtcaStatus {
+        self.default_dev_status()
+    }
+    /// Depending on the socket configuration, this function calculates
+    /// public key based on an existing private key in the socket
+    /// or exports the public key directly
     fn get_public_key(&self, _slot_number: u8, _public_key: &mut Vec<u8>) -> AtcaStatus {
         self.default_dev_status()
     }
