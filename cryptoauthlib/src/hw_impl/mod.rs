@@ -3,13 +3,10 @@ use std::convert::{From, TryFrom};
 use std::ptr;
 use std::sync::Mutex;
 
-// Only temporarily!
-#[allow(unused_imports)]
 use super::{
-    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, ChipOptions, EccKeyAttr, InfoCmdType, KeyType, NonceTarget,
-    OutputProtectionState, ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam,
-    VerifyMode, WriteConfig,
+    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceType, AtcaSlot, AtcaStatus,
+    ChipOptions, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState, ReadKey,
+    SignMode, SlotConfig, VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY,

@@ -1,12 +1,9 @@
-use rand::{distributions::Standard, Rng};
-// Only temporarily!
-#[allow(unused_imports, deprecated)]
 use super::{
-    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceI2c, AtcaIfaceType,
-    AtcaSlot, AtcaStatus, EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState,
-    ReadKey, SignEcdsaParam, SignMode, SlotConfig, VerifyEcdsaParam, VerifyMode, WriteConfig,
+    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus, InfoCmdType, KeyType,
+    OutputProtectionState, SignMode, VerifyMode,
 };
 use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
+use rand::{distributions::Standard, Rng};
 
 pub struct AteccDevice {
     dev_type: AtcaDeviceType,

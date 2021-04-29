@@ -1,22 +1,19 @@
+#![allow(unused_imports)]
 use serial_test::serial;
 
 // Types
-#[allow(unused_imports)]
 use super::{
     AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaSlot, AtcaStatus, AteccDevice,
     InfoCmdType, KeyType, NonceTarget, SignEcdsaParam, SignMode, VerifyEcdsaParam, VerifyMode,
 };
 // Constants
-#[allow(unused_imports)]
 use super::{
     ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT,
     ATCA_NONCE_NUMIN_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG,
 };
 // Functions
-#[allow(unused_imports)]
 use super::setup_atecc_device;
 // Modules
-#[allow(unused_imports)]
 use super::hw_impl;
 
 #[cfg(not(feature = "software-backend"))]
