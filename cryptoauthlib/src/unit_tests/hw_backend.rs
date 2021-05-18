@@ -364,22 +364,46 @@ fn get_pubkey() {
     let device = test_setup();
 
     let mut public_key: Vec<u8> = Vec::new();
+    let public_key_write = [
+        0xBA, 0x6A, 0xB5, 0xF1, 0x19, 0xAF, 0x21, 0x73, 0x03, 0x75, 0xD1, 0x8D, 0x6B, 0x5F, 0xF1,
+        0x94, 0x33, 0xE5, 0x3A, 0xEE, 0x5F, 0x6F, 0xBA, 0x22, 0x97, 0x77, 0x13, 0xEA, 0x82, 0xD3,
+        0x74, 0x84, 0x8E, 0x39, 0x78, 0x66, 0xE8, 0x36, 0xB3, 0xFE, 0xD3, 0x22, 0x87, 0x74, 0xA5,
+        0x00, 0xC5, 0x5C, 0x17, 0x73, 0x5A, 0x92, 0x4B, 0xB3, 0x9F, 0xE4, 0x98, 0x52, 0x62, 0xA5,
+        0x36, 0xC5, 0x00, 0x9C,
+    ]
+    .to_vec();
 
-    let result = device.get_public_key(0x00, &mut public_key);
+    let get_key_ok_1 = device.get_public_key(0x00, &mut public_key);
     let sum: u16 = public_key.iter().fold(0, |s, &x| s + x as u16);
+    let mut get_key_ok_2 = super::AtcaStatus::AtcaUnknown;
+    let get_key_bad_1 = device.get_public_key(0x01, &mut public_key);
 
-    let mut expected = super::AtcaStatus::AtcaSuccess;
+    let mut expected_get_key_ok_1 = super::AtcaStatus::AtcaSuccess;
+    let mut expected_get_key_ok_2 = super::AtcaStatus::AtcaSuccess;
+    let mut expected_get_key_bad_1 = super::AtcaStatus::AtcaBadParam;
+
     if !device.configuration_is_locked() {
         println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
-        expected = super::AtcaStatus::AtcaNotLocked;
+        expected_get_key_ok_1 = super::AtcaStatus::AtcaNotLocked;
+        expected_get_key_ok_2 = super::AtcaStatus::AtcaNotLocked;
+        expected_get_key_bad_1 = super::AtcaStatus::AtcaNotLocked;
     } else {
         assert_eq!(public_key.len(), super::ATCA_ATECC_PUB_KEY_SIZE);
         assert_ne!(sum, 0);
     }
 
+    if device.import_key(super::KeyType::P256EccKey, &public_key_write, 0x0B)
+        == super::AtcaStatus::AtcaSuccess
+    {
+        get_key_ok_2 = device.get_public_key(0x0B, &mut public_key);
+    }
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
-    assert_eq!(result, expected);
+    assert_eq!(get_key_ok_1, expected_get_key_ok_1);
+    assert_eq!(get_key_ok_2, expected_get_key_ok_2);
+    assert_eq!(public_key_write, public_key);
+    assert_eq!(get_key_bad_1, expected_get_key_bad_1);
 }
 
 #[test]
