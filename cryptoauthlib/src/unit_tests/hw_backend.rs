@@ -10,7 +10,7 @@ use super::{
 };
 // Constants
 use super::{
-    ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_NONCE_NUMIN_SIZE,
+    ATCA_AES_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_NONCE_NUMIN_SIZE,
     ATCA_RANDOM_BUFFER_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG,
 };
 // Functions
@@ -143,7 +143,7 @@ fn sha() {
 
     let mut expected = AtcaStatus::AtcaSuccess;
     if !device.is_configuration_locked() {
-        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        print!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m ");
         expected = AtcaStatus::AtcaNotLocked;
     } else {
         assert_eq!(digest, test_message_hash);
@@ -240,7 +240,7 @@ fn gen_key() {
     let mut expected_device_gen_key_bad_4 = AtcaStatus::AtcaBadParam;
     let mut expected_device_gen_key_ok_1 = AtcaStatus::AtcaSuccess;
     if !device.is_configuration_locked() {
-        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        print!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m ");
         expected_device_gen_key_bad_1 = AtcaStatus::AtcaNotLocked;
         expected_device_gen_key_bad_2 = AtcaStatus::AtcaNotLocked;
         expected_device_gen_key_bad_3 = AtcaStatus::AtcaNotLocked;
@@ -333,7 +333,7 @@ fn import_key() {
         let mut expected_pub_key_bad_2 = AtcaStatus::AtcaInvalidId;
         let mut expected_pub_key_bad_3 = AtcaStatus::AtcaBadParam;
         if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
-            println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+            print!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m ");
             expected_priv_key_ok = AtcaStatus::AtcaNotLocked;
             expected_priv_key_bad_1 = AtcaStatus::AtcaNotLocked;
             expected_priv_key_bad_2 = AtcaStatus::AtcaNotLocked;
@@ -395,7 +395,7 @@ fn get_pubkey() {
     let mut expected_get_key_bad_1 = AtcaStatus::AtcaBadParam;
 
     if !device.is_configuration_locked() {
-        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        print!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m ");
         expected_get_key_ok_1 = AtcaStatus::AtcaNotLocked;
         expected_get_key_ok_2 = AtcaStatus::AtcaNotLocked;
         expected_get_key_bad_1 = AtcaStatus::AtcaNotLocked;
@@ -414,6 +414,68 @@ fn get_pubkey() {
     assert_eq!(get_key_ok_2, expected_get_key_ok_2);
     assert_eq!(public_key_write, public_key);
     assert_eq!(get_key_bad_1, expected_get_key_bad_1);
+}
+
+#[test]
+#[serial]
+fn export_key_aes() {
+    const AES_SLOT_IDX_OK: u8 = 0x09;
+    const AES_SLOT_IDX_BAD: u8 = 0x01;
+    const ENCRYPTION_KEY_SLOT: u8 = 0x06;
+
+    let device = test_setup();
+
+    let aes_key_write: [u8; ATCA_AES_KEY_SIZE] = [
+        0xBA, 0x6A, 0xB5, 0xF1, 0x19, 0xAF, 0x21, 0x73, 0x03, 0x75, 0xD1, 0x8D, 0x6B, 0x5F, 0xF1,
+        0x94,
+    ];
+
+    let write_key = [
+        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
+        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
+        0x66, 0x45,
+    ];
+
+    let mut aes_key_read: Vec<u8> = Vec::new();
+
+    let mut expected_export_key_bad_1 = AtcaStatus::AtcaInvalidId;
+    let mut expected_export_key_bad_2 = AtcaStatus::AtcaBadParam;
+    let mut expected_import_key_result = AtcaStatus::AtcaSuccess;
+    let mut expected_export_key_ok_1 = AtcaStatus::AtcaSuccess;
+
+    if !device.is_aes_enabled() {
+        expected_export_key_bad_2 = AtcaStatus::AtcaBadParam;
+        expected_import_key_result = AtcaStatus::AtcaBadParam;
+        expected_export_key_ok_1 = AtcaStatus::AtcaBadParam;
+    }
+    if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
+        print!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m ");
+        expected_export_key_bad_1 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_bad_2 = AtcaStatus::AtcaNotLocked;
+        expected_import_key_result = AtcaStatus::AtcaNotLocked;
+        expected_export_key_ok_1 = AtcaStatus::AtcaNotLocked;
+    }
+
+    let export_key_bad_1 =
+        device.export_key(KeyType::Aes, &mut aes_key_read, ATCA_ATECC_SLOTS_COUNT);
+    let export_key_bad_2 = device.export_key(KeyType::Aes, &mut aes_key_read, AES_SLOT_IDX_BAD);
+
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &write_key);
+    let import_key_result = device.import_key(KeyType::Aes, &aes_key_write, AES_SLOT_IDX_OK);
+    let export_key_ok_1 = device.export_key(KeyType::Aes, &mut aes_key_read, AES_SLOT_IDX_OK);
+    // Due to the limited number of available slots, there is no AES slot in the configuration with reading without encryption
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(export_key_bad_1, expected_export_key_bad_1);
+    assert_eq!(export_key_bad_2, expected_export_key_bad_2);
+
+    assert_eq!(device_set_write_key.to_string(), "AtcaSuccess");
+    assert_eq!(import_key_result, expected_import_key_result);
+    assert_eq!(export_key_ok_1, expected_export_key_ok_1);
+    if (AtcaStatus::AtcaNotLocked != expected_export_key_ok_1) && device.is_aes_enabled() {
+        assert_eq!(aes_key_read, aes_key_write.to_vec())
+    }
 }
 
 #[test]
@@ -459,7 +521,7 @@ fn sign_verify_hash() {
         expected_get_pub_key_result = AtcaStatus::AtcaNotLocked;
     }
     if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
-        println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
+        print!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m ");
         expected_sign_internal = AtcaStatus::AtcaNotLocked;
         expected_verify_external_result = AtcaStatus::AtcaNotLocked;
         expected_sign_external = AtcaStatus::AtcaNotLocked;

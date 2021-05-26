@@ -162,6 +162,7 @@ impl Default for AtcaSlot {
 #[derive(Copy, Clone, Debug)]
 pub struct AtcaSlotCapacity {
     pub blocks: u8,
+    pub last_block_bytes: u8,
     pub bytes: u16,
 }
 
@@ -169,6 +170,7 @@ impl Default for AtcaSlotCapacity {
     fn default() -> Self {
         AtcaSlotCapacity {
             blocks: 0u8,
+            last_block_bytes: 0u8,
             bytes: 0u16,
         }
     }

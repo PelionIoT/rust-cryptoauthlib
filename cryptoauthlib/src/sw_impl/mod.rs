@@ -206,7 +206,7 @@ impl AteccDeviceTrait for AteccDevice {
     /// Compare internal config zone contents vs. config_data.
     /// Diagnostic function.
     #[cfg(test)]
-    fn cmp_config_zone(&self, _config_data: &mut Vec<u8>) -> Result<bool, AtcaStatus> {
+    fn cmp_config_zone(&self, _config_data: &mut [u8]) -> Result<bool, AtcaStatus> {
         match self.dev_type {
             AtcaDeviceType::AtcaTestDevSuccess => Ok(true),
             _ => Err(self.default_dev_status()),

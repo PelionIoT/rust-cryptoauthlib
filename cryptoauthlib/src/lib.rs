@@ -114,7 +114,7 @@ pub trait AteccDeviceTrait {
     /// Compare internal config zone contents vs. config_data.
     /// Diagnostic function.
     #[cfg(test)]
-    fn cmp_config_zone(&self, config_data: &mut Vec<u8>) -> Result<bool, AtcaStatus>;
+    fn cmp_config_zone(&self, config_data: &mut [u8]) -> Result<bool, AtcaStatus>;
     /// A function that takes an encryption key for securely reading or writing data
     /// that is located in a specific slot on an ATECCx08 chip.
     /// Data is not taken directly from the ATECCx08 chip, but from the AteccDevice structure
