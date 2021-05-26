@@ -29,19 +29,19 @@ pub trait AteccDeviceTrait {
     /// nonce and a device random number.
     fn nonce_rand(&self, host_nonce: &[u8], rand_out: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to generate a cryptographic key
-    fn gen_key(&self, key_type: KeyType, slot_number: u8) -> AtcaStatus;
+    fn gen_key(&self, key_type: KeyType, slot_id: u8) -> AtcaStatus;
     /// Request ATECC to import a cryptographic key
-    fn import_key(&self, key_type: KeyType, key_data: &[u8], slot_number: u8) -> AtcaStatus;
+    fn import_key(&self, key_type: KeyType, key_data: &[u8], slot_id: u8) -> AtcaStatus;
     /// Request ATECC to export a cryptographic key.
     /// For cryptographic security reasons,
     /// with KeyType = P256EccKey this function exports only public key
-    fn export_key(&self, key_type: KeyType, key_data: &mut Vec<u8>, slot_number: u8) -> AtcaStatus;
+    fn export_key(&self, key_type: KeyType, key_data: &mut Vec<u8>, slot_id: u8) -> AtcaStatus;
     /// Depending on the socket configuration, this function calculates
     /// public key based on an existing private key in the socket
     /// or exports the public key directly
-    fn get_public_key(&self, slot_number: u8, public_key: &mut Vec<u8>) -> AtcaStatus;
+    fn get_public_key(&self, slot_id: u8, public_key: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to generate an ECDSA signature
-    fn sign_hash(&self, mode: SignMode, slot_number: u8, signature: &mut Vec<u8>) -> AtcaStatus;
+    fn sign_hash(&self, mode: SignMode, slot_id: u8, signature: &mut Vec<u8>) -> AtcaStatus;
     /// Request ATECC to verify ECDSA signature
     fn verify_hash(
         &self,
@@ -53,36 +53,22 @@ pub trait AteccDeviceTrait {
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn configuration_is_locked(&self) -> bool;
+    fn is_configuration_locked(&self) -> bool;
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn data_zone_is_locked(&self) -> bool;
-    /// Request ATECC to read and return own configuration zone.
-    /// Note: this function returns raw data, function get_config(..) implements a more
-    /// structured return value.
-    fn read_config_zone(&self, config_data: &mut Vec<u8>) -> AtcaStatus;
-    /// Compare internal config zone contents vs. config_data.
-    /// Diagnostic function.
-    fn cmp_config_zone(&self, config_data: &mut Vec<u8>, same_config: &mut bool) -> AtcaStatus;
+    fn is_data_zone_locked(&self) -> bool;
     /// Returns a structure containing configuration data read from ATECC
     /// during initialization of the AteccDevice object.
     fn get_config(&self, atca_slots: &mut Vec<AtcaSlot>) -> AtcaStatus;
-    /// A generic function that reads data from the chip
-    fn read_zone(
-        &self,
-        zone: u8,
-        slot: u16,
-        block: u8,
-        offset: u8,
-        data: &mut Vec<u8>,
-        len: u8,
-    ) -> AtcaStatus;
     /// Command accesses some static or dynamic information from the ATECC chip
     fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus>;
-    /// A function that sets an encryption key for secure data writes to slots
-    fn set_write_encryption_key(&self, encryption_key: &[u8]) -> AtcaStatus;
-    /// Function that resets encryption key for securely writing data to slots
-    fn flush_write_encryption_key(&self) -> AtcaStatus;
+    /// A function that adds an encryption key for securely reading or writing data
+    /// that is located in a specific slot on the ATECCx08 chip.
+    /// Data is not written to the ATECCx08 chip, but to the AteccDevice structure
+    fn add_access_key(&self, slot_id: u8, encryption_key: &[u8]) -> AtcaStatus;
+    /// A function that deletes all encryption keys for secure read or write operations
+    /// performed by the ATECCx08 chip
+    fn flush_access_keys(&self) -> AtcaStatus;
     /// Get serial number of the ATECC device
     fn get_serial_number(&self) -> [u8; ATCA_SERIAL_NUM_SIZE];
     /// Checks if the chip supports AES encryption.
@@ -102,6 +88,38 @@ pub trait AteccDeviceTrait {
     fn get_kdf_output_protection_state(&self) -> OutputProtectionState;
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus;
+
+    //--------------------------------------------------
+    //
+    // Functions available only during testing
+    //
+    //--------------------------------------------------
+
+    /// A generic function that reads data from the chip
+    #[cfg(test)]
+    fn read_zone(
+        &self,
+        zone: u8,
+        slot: u16,
+        block: u8,
+        offset: u8,
+        data: &mut Vec<u8>,
+        len: u8,
+    ) -> AtcaStatus;
+    /// Request ATECC to read and return own configuration zone.
+    /// Note: this function returns raw data, function get_config(..) implements a more
+    /// structured return value.
+    #[cfg(test)]
+    fn read_config_zone(&self, config_data: &mut Vec<u8>) -> AtcaStatus;
+    /// Compare internal config zone contents vs. config_data.
+    /// Diagnostic function.
+    #[cfg(test)]
+    fn cmp_config_zone(&self, config_data: &mut Vec<u8>) -> Result<bool, AtcaStatus>;
+    /// A function that takes an encryption key for securely reading or writing data
+    /// that is located in a specific slot on an ATECCx08 chip.
+    /// Data is not taken directly from the ATECCx08 chip, but from the AteccDevice structure
+    #[cfg(test)]
+    fn get_access_key(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus;
 }
 
 pub type AteccDevice = Box<dyn AteccDeviceTrait + Send + Sync>;

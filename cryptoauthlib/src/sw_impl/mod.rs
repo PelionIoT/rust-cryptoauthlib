@@ -1,7 +1,8 @@
 use super::{
-    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus, InfoCmdType, KeyType,
-    OutputProtectionState, SignMode, VerifyMode,
+    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus, AteccDeviceTrait,
+    InfoCmdType, KeyType, NonceTarget, OutputProtectionState, SignMode, VerifyMode,
 };
+
 use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 use rand::{distributions::Standard, Rng};
 
@@ -10,7 +11,7 @@ pub struct AteccDevice {
 }
 
 // Software ATECC implements following functions:
-// new(), random(), get_device_type(), configuration_is_locked(), get_config(), release().
+// new(), random(), get_device_type(), is_configuration_locked(), get_config(), release().
 // All aothers are considered to be mocked.
 // Depending on set device type they either:
 // - always fails
@@ -24,7 +25,7 @@ impl Default for AteccDevice {
     }
 }
 
-impl super::AteccDeviceTrait for AteccDevice {
+impl AteccDeviceTrait for AteccDevice {
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus {
         let vector: Vec<u8> = rand::thread_rng()
             .sample_iter(Standard)
@@ -48,7 +49,7 @@ impl super::AteccDeviceTrait for AteccDevice {
     /// For the ATECC608A, available targets are TempKey (32 or 64 bytes), Message
     /// Digest Buffer (32 or 64 bytes), or the Alternate Key Buffer (32 bytes). For
     /// all other devices, only TempKey (32 bytes) is available.
-    fn nonce(&self, _target: super::NonceTarget, _data: &[u8]) -> AtcaStatus {
+    fn nonce(&self, _target: NonceTarget, _data: &[u8]) -> AtcaStatus {
         self.default_dev_status()
     }
     /// Execute a Nonce command to generate a random nonce combining a host
@@ -57,7 +58,7 @@ impl super::AteccDeviceTrait for AteccDevice {
         self.default_dev_status()
     }
     /// Request ATECC to generate a cryptographic key
-    fn gen_key(&self, _key_type: KeyType, _slot_number: u8) -> AtcaStatus {
+    fn gen_key(&self, _key_type: KeyType, _slot_id: u8) -> AtcaStatus {
         self.default_dev_status()
     }
     /// Request ATECC to import a cryptographic key
@@ -65,22 +66,17 @@ impl super::AteccDeviceTrait for AteccDevice {
         self.default_dev_status()
     }
     /// Request ATECC to export a cryptographic key
-    fn export_key(
-        &self,
-        _key_type: KeyType,
-        _key_data: &mut Vec<u8>,
-        _slot_number: u8,
-    ) -> AtcaStatus {
+    fn export_key(&self, _key_type: KeyType, _key_data: &mut Vec<u8>, _slot_id: u8) -> AtcaStatus {
         self.default_dev_status()
     }
     /// Depending on the socket configuration, this function calculates
     /// public key based on an existing private key in the socket
     /// or exports the public key directly
-    fn get_public_key(&self, _slot_number: u8, _public_key: &mut Vec<u8>) -> AtcaStatus {
+    fn get_public_key(&self, _slot_id: u8, _public_key: &mut Vec<u8>) -> AtcaStatus {
         self.default_dev_status()
     }
     /// Request ATECC to generate an ECDSA signature
-    fn sign_hash(&self, _mode: SignMode, _slot_number: u8, _signature: &mut Vec<u8>) -> AtcaStatus {
+    fn sign_hash(&self, _mode: SignMode, _slot_id: u8, _signature: &mut Vec<u8>) -> AtcaStatus {
         self.default_dev_status()
     }
     /// Request ATECC to verify ECDSA signature
@@ -101,7 +97,7 @@ impl super::AteccDeviceTrait for AteccDevice {
     }
     /// Request ATECC to check if its configuration is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn configuration_is_locked(&self) -> bool {
+    fn is_configuration_locked(&self) -> bool {
         match self.dev_type {
             AtcaDeviceType::AtcaTestDevFailUnimplemented | AtcaDeviceType::AtcaTestDevSuccess => {
                 true
@@ -111,19 +107,8 @@ impl super::AteccDeviceTrait for AteccDevice {
     }
     /// Request ATECC to check if its Data Zone is locked.
     /// If true, a chip can be used for cryptographic operations
-    fn data_zone_is_locked(&self) -> bool {
+    fn is_data_zone_locked(&self) -> bool {
         matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
-    }
-    /// Request ATECC to read and return own configuration zone.
-    /// Note: this function returns raw data, function get_config(..) implements a more
-    /// structured return value.
-    fn read_config_zone(&self, _config_data: &mut Vec<u8>) -> AtcaStatus {
-        self.default_dev_status()
-    }
-    /// Compare internal config zone contents vs. config_data.
-    /// Diagnostic function.
-    fn cmp_config_zone(&self, _config_data: &mut Vec<u8>, _same_config: &mut bool) -> AtcaStatus {
-        self.default_dev_status()
     }
     /// Returns a structure containing configuration data read from ATECC
     /// during initialization of the AteccDevice object.
@@ -135,20 +120,6 @@ impl super::AteccDeviceTrait for AteccDevice {
             _ => AtcaStatus::AtcaUnimplemented,
         }
     }
-
-    /// A generic function that reads data from the chip
-    fn read_zone(
-        &self,
-        _zone: u8,
-        _slot: u16,
-        _block: u8,
-        _offset: u8,
-        data: &mut Vec<u8>,
-        _len: u8,
-    ) -> AtcaStatus {
-        data.clear();
-        self.default_dev_status()
-    }
     /// Command accesses some static or dynamic information from the ATECC chip
     fn info_cmd(&self, _command: InfoCmdType) -> Result<Vec<u8>, AtcaStatus> {
         match self.dev_type {
@@ -157,11 +128,11 @@ impl super::AteccDeviceTrait for AteccDevice {
         }
     }
 
-    fn set_write_encryption_key(&self, _encryption_key: &[u8]) -> AtcaStatus {
+    fn add_access_key(&self, _slot_id: u8, _encryption_key: &[u8]) -> AtcaStatus {
         self.default_dev_status()
     }
 
-    fn flush_write_encryption_key(&self) -> AtcaStatus {
+    fn flush_access_keys(&self) -> AtcaStatus {
         self.default_dev_status()
     }
 
@@ -203,6 +174,47 @@ impl super::AteccDeviceTrait for AteccDevice {
             }
             _ => AtcaStatus::AtcaUnimplemented,
         }
+    }
+
+    //--------------------------------------------------
+    //
+    // Functions available only during testing
+    //
+    //--------------------------------------------------
+
+    /// A generic function that reads data from the chip
+    #[cfg(test)]
+    fn read_zone(
+        &self,
+        _zone: u8,
+        _slot: u16,
+        _block: u8,
+        _offset: u8,
+        data: &mut Vec<u8>,
+        _len: u8,
+    ) -> AtcaStatus {
+        data.clear();
+        self.default_dev_status()
+    }
+    /// Request ATECC to read and return own configuration zone.
+    /// Note: this function returns raw data, function get_config(..) implements a more
+    /// structured return value.
+    #[cfg(test)]
+    fn read_config_zone(&self, _config_data: &mut Vec<u8>) -> AtcaStatus {
+        self.default_dev_status()
+    }
+    /// Compare internal config zone contents vs. config_data.
+    /// Diagnostic function.
+    #[cfg(test)]
+    fn cmp_config_zone(&self, _config_data: &mut Vec<u8>) -> Result<bool, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(true),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    #[cfg(test)]
+    fn get_access_key(&self, _slot_id: u8, _key: &mut Vec<u8>) -> AtcaStatus {
+        self.default_dev_status()
     }
 }
 

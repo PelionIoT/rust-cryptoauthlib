@@ -158,6 +158,22 @@ impl Default for AtcaSlot {
     }
 }
 
+/// An ATECC slot capacity
+#[derive(Copy, Clone, Debug)]
+pub struct AtcaSlotCapacity {
+    pub blocks: u8,
+    pub bytes: u16,
+}
+
+impl Default for AtcaSlotCapacity {
+    fn default() -> Self {
+        AtcaSlotCapacity {
+            blocks: 0u8,
+            bytes: 0u16,
+        }
+    }
+}
+
 /// Detailed ATECC key slot configuration
 #[derive(Copy, Clone, Debug)]
 pub struct SlotConfig {

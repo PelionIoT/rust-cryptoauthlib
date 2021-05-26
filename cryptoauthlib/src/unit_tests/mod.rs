@@ -32,7 +32,7 @@ fn random() {
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
 
-        assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+        assert_eq!(rand_out.len(), ATCA_RANDOM_BUFFER_SIZE);
         assert_eq!(device.release().to_string(), "AtcaSuccess");
         assert_eq!(device_random.to_string(), "AtcaSuccess");
     }
@@ -42,7 +42,7 @@ fn random() {
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
 
-        assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+        assert_eq!(rand_out.len(), ATCA_RANDOM_BUFFER_SIZE);
         assert_eq!(device.release().to_string(), "AtcaSuccess");
         assert_eq!(device_random.to_string(), "AtcaSuccess");
     }
@@ -52,7 +52,7 @@ fn random() {
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
 
-        assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+        assert_eq!(rand_out.len(), ATCA_RANDOM_BUFFER_SIZE);
         assert_ne!(device.release().to_string(), "AtcaSuccess");
         assert_ne!(device_random.to_string(), "AtcaSuccess");
     }
@@ -63,12 +63,12 @@ fn random() {
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
 
-        let mut expected = super::AtcaStatus::AtcaSuccess;
-        if !device.configuration_is_locked() {
+        let mut expected = AtcaStatus::AtcaSuccess;
+        if !device.is_configuration_locked() {
             println!("\u{001b}[1m\u{001b}[33mConfiguration not Locked!\u{001b}[0m");
-            expected = super::AtcaStatus::AtcaNotLocked;
+            expected = AtcaStatus::AtcaNotLocked;
         } else {
-            assert_eq!(rand_out.len(), super::ATCA_RANDOM_BUFFER_SIZE);
+            assert_eq!(rand_out.len(), ATCA_RANDOM_BUFFER_SIZE);
         }
         assert_eq!(device.release().to_string(), "AtcaSuccess");
         assert_eq!(device_random, expected);
@@ -90,23 +90,21 @@ fn read_config_zone() {
     assert_eq!(device.release().to_string(), "AtcaSuccess");
     match device_get_device_type {
         #[cfg(not(feature = "software-backend"))]
-        super::AtcaDeviceType::ATECC508A
-        | super::AtcaDeviceType::ATECC608A
-        | super::AtcaDeviceType::ATECC108A => {
+        AtcaDeviceType::ATECC508A | AtcaDeviceType::ATECC608A | AtcaDeviceType::ATECC108A => {
             assert_eq!(device_read_config_zone.to_string(), "AtcaSuccess");
-            assert_eq!(config_data.len(), super::ATCA_ATECC_CONFIG_BUFFER_SIZE);
+            assert_eq!(config_data.len(), ATCA_ATECC_CONFIG_BUFFER_SIZE);
             assert_eq!(config_data[0], 0x01);
             assert_eq!(config_data[1], 0x23);
         }
         #[cfg(feature = "software-backend")]
-        super::AtcaDeviceType::AtcaTestDevFail => {
+        AtcaDeviceType::AtcaTestDevFail => {
             assert_ne!(device_read_config_zone.to_string(), "AtcaSuccess");
         }
         #[cfg(feature = "software-backend")]
-        super::AtcaDeviceType::AtcaTestDevSuccess => {
+        AtcaDeviceType::AtcaTestDevSuccess => {
             assert_eq!(device_read_config_zone.to_string(), "AtcaSuccess");
         }
-        super::AtcaDeviceType::AtcaDevUnknown => {
+        AtcaDeviceType::AtcaDevUnknown => {
             panic!("Unexpected device type: AtcaDevUnknown.");
         }
         _ => panic!("Missing device type."),
