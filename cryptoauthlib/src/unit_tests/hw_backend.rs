@@ -5,8 +5,9 @@ use std::path::Path;
 
 // Types
 use super::{
-    AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaSlot, AtcaStatus, AteccDevice, InfoCmdType, KeyType,
-    NonceTarget, SignEcdsaParam, SignMode, VerifyEcdsaParam, VerifyMode,
+    AeadAlgorithm, AeadParam, AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaSlot, AtcaStatus,
+    AteccDevice, InfoCmdType, KeyType, NonceTarget, SignEcdsaParam, SignMode, VerifyEcdsaParam,
+    VerifyMode,
 };
 // Constants
 use super::{
@@ -186,7 +187,7 @@ fn nonce() {
 
     assert_eq!(nonce_32_ok.to_string(), "AtcaSuccess");
     assert_eq!(nonce_64_ok, expected);
-    assert_eq!(nonce_bad.to_string(), "AtcaBadParam");
+    assert_eq!(nonce_bad.to_string(), "AtcaInvalidSize");
     assert_eq!(check_ver_result.to_string(), "AtcaSuccess");
 }
 
@@ -539,6 +540,322 @@ fn sign_verify_hash() {
     assert_eq!(sign_external, expected_sign_external);
     assert_eq!(get_pub_key_result, expected_get_pub_key_result);
     assert_eq!(verify_internal_result, expected_verify_internal_result);
+}
+
+#[test]
+#[serial]
+fn aead_ccm() {
+    let device = test_setup();
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+}
+
+#[test]
+#[serial]
+fn aead_gcm_encrypt() {
+    const DATA_32_SIZE: usize = 32;
+    const DATA_24_SIZE: usize = 24;
+    const AES_KEY_SLOT_IDX: u8 = 0x09;
+
+    let aes_key = [
+        0xB7, 0xCF, 0x6C, 0xF5, 0xE7, 0xF3, 0xCA, 0x22, 0x3C, 0xA7, 0x3C, 0x81, 0x9D, 0xCD, 0x62,
+        0xFE,
+    ];
+    let iv = [
+        0xA4, 0x13, 0x60, 0x09, 0xC0, 0xA7, 0xFD, 0xAC, 0xFE, 0x53, 0xF5, 0x07,
+    ];
+    let plain_text = [
+        0x9F, 0xEE, 0xBB, 0xDF, 0x16, 0x0F, 0x96, 0x52, 0x53, 0xD9, 0x99, 0x58, 0xCC, 0xB1, 0x76,
+        0xDF, 0x9F, 0xEE, 0xBB, 0xDF, 0x16, 0x0F, 0x96, 0x52, 0x53, 0xD9, 0x99, 0x58, 0xCC, 0xB1,
+        0x76, 0xDF,
+    ];
+    let cipher_text = [
+        0xA6, 0x97, 0x10, 0x3A, 0x70, 0x29, 0x7A, 0xAA, 0xCD, 0x25, 0x9E, 0x1A, 0x85, 0x36, 0xA7,
+        0xDC, 0x3E, 0x61, 0x7D, 0xA2, 0xA8, 0x66, 0x3F, 0xD2, 0xFC, 0x5D, 0x6A, 0x6C, 0x36, 0xEA,
+        0x2C, 0xD8,
+    ];
+    let aad = [
+        0x47, 0x6B, 0x48, 0x80, 0xF5, 0x93, 0x33, 0x14, 0xDC, 0xC2, 0x3D, 0xF5, 0xDC, 0xB0, 0x09,
+        0x66, 0x47, 0x6B, 0x48, 0x80, 0xF5, 0x93, 0x33, 0x14, 0xDC, 0xC2, 0x3D, 0xF5, 0xDC, 0xB0,
+        0x09, 0x66,
+    ];
+    let tag_32 = [
+        0x3E, 0xCA, 0xD1, 0x08, 0xF6, 0x8D, 0xC4, 0x54, 0xE6, 0xA1, 0x17, 0x5B, 0x9D, 0x4E, 0x16,
+        0xB3,
+    ];
+    let tag_24 = [
+        0x74, 0x99, 0x3B, 0x31, 0x06, 0xBA, 0x6B, 0xE5, 0x00, 0x8F, 0xD5, 0x3A, 0xA4, 0x91, 0xAA,
+        0xAF,
+    ];
+
+    let device = test_setup();
+
+    match is_chip_version_608(&device) {
+        Ok(true) => {
+            let result = device.import_key(KeyType::Aes, &aes_key, AES_KEY_SLOT_IDX);
+            if result != AtcaStatus::AtcaSuccess {
+                assert_eq!(device.release().to_string(), "AtcaSuccess");
+                panic!(
+                    "failed to load AES key into chip - error: {}",
+                    result.to_string()
+                );
+            }
+        }
+        Ok(false) => (),
+        Err(err) => {
+            assert_eq!(device.release().to_string(), "AtcaSuccess");
+            panic!("is_chip_version_608() error: {}", err.to_string());
+        }
+    }
+
+    let expected_32: AtcaStatus;
+    let expected_24: AtcaStatus;
+    let expected_32_internal_key: AtcaStatus;
+    let expected_24_internal_key: AtcaStatus;
+    let param_32 = AeadParam {
+        key: Some(aes_key),
+        nonce: iv.to_vec(),
+        additional_data: Some(aad.to_vec()),
+        ..Default::default()
+    };
+    let param_24 = AeadParam {
+        key: Some(aes_key),
+        nonce: iv.to_vec(),
+        additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
+        ..Default::default()
+    };
+    let param_32_internal_key = AeadParam {
+        nonce: iv.to_vec(),
+        additional_data: Some(aad.to_vec()),
+        ..Default::default()
+    };
+    let param_24_internal_key = AeadParam {
+        nonce: iv.to_vec(),
+        additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
+        ..Default::default()
+    };
+
+    let mut data_24: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
+    data_24.clone_from_slice(&plain_text[..DATA_24_SIZE]);
+    let mut data_32: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
+    data_32.clone_from_slice(&plain_text);
+
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_32),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_32,
+    ) {
+        Ok(tag) => {
+            assert_eq!(tag, tag_32);
+            assert_eq!(data_32, cipher_text);
+            expected_32 = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_32 = err,
+    }
+
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_24),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_24,
+    ) {
+        Ok(tag) => {
+            assert_eq!(tag, tag_24);
+            assert_eq!(data_24.to_vec(), cipher_text[..DATA_24_SIZE].to_vec());
+            expected_24 = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_24 = err,
+    }
+
+    data_32.clone_from_slice(&plain_text);
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_32_internal_key),
+        AES_KEY_SLOT_IDX,
+        &mut data_32,
+    ) {
+        Ok(tag) => {
+            assert_eq!(tag, tag_32);
+            assert_eq!(data_32, cipher_text);
+            expected_32_internal_key = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_32_internal_key = err,
+    }
+
+    data_24.clone_from_slice(&plain_text[..DATA_24_SIZE]);
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_24_internal_key),
+        AES_KEY_SLOT_IDX,
+        &mut data_24,
+    ) {
+        Ok(tag) => {
+            assert_eq!(tag, tag_24);
+            assert_eq!(data_24.to_vec(), cipher_text[..DATA_24_SIZE].to_vec());
+            expected_24_internal_key = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_24_internal_key = err,
+    }
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(expected_32, AtcaStatus::AtcaSuccess);
+    assert_eq!(expected_24, AtcaStatus::AtcaSuccess);
+    assert_eq!(expected_32_internal_key, AtcaStatus::AtcaSuccess);
+    assert_eq!(expected_24_internal_key, AtcaStatus::AtcaSuccess);
+}
+
+#[test]
+#[serial]
+fn aead_gcm_decrypt() {
+    const DATA_32_SIZE: usize = 32;
+    const DATA_24_SIZE: usize = 24;
+    const AES_KEY_SLOT_IDX: u8 = 0x09;
+
+    let aes_key = [
+        0xB7, 0xCF, 0x6C, 0xF5, 0xE7, 0xF3, 0xCA, 0x22, 0x3C, 0xA7, 0x3C, 0x81, 0x9D, 0xCD, 0x62,
+        0xFE,
+    ];
+    let iv = [
+        0xA4, 0x13, 0x60, 0x09, 0xC0, 0xA7, 0xFD, 0xAC, 0xFE, 0x53, 0xF5, 0x07,
+    ];
+    let plain_text = [
+        0x9F, 0xEE, 0xBB, 0xDF, 0x16, 0x0F, 0x96, 0x52, 0x53, 0xD9, 0x99, 0x58, 0xCC, 0xB1, 0x76,
+        0xDF, 0x9F, 0xEE, 0xBB, 0xDF, 0x16, 0x0F, 0x96, 0x52, 0x53, 0xD9, 0x99, 0x58, 0xCC, 0xB1,
+        0x76, 0xDF,
+    ];
+    let cipher_text = [
+        0xA6, 0x97, 0x10, 0x3A, 0x70, 0x29, 0x7A, 0xAA, 0xCD, 0x25, 0x9E, 0x1A, 0x85, 0x36, 0xA7,
+        0xDC, 0x3E, 0x61, 0x7D, 0xA2, 0xA8, 0x66, 0x3F, 0xD2, 0xFC, 0x5D, 0x6A, 0x6C, 0x36, 0xEA,
+        0x2C, 0xD8,
+    ];
+    let aad = [
+        0x47, 0x6B, 0x48, 0x80, 0xF5, 0x93, 0x33, 0x14, 0xDC, 0xC2, 0x3D, 0xF5, 0xDC, 0xB0, 0x09,
+        0x66, 0x47, 0x6B, 0x48, 0x80, 0xF5, 0x93, 0x33, 0x14, 0xDC, 0xC2, 0x3D, 0xF5, 0xDC, 0xB0,
+        0x09, 0x66,
+    ];
+    let tag_32 = [
+        0x3E, 0xCA, 0xD1, 0x08, 0xF6, 0x8D, 0xC4, 0x54, 0xE6, 0xA1, 0x17, 0x5B, 0x9D, 0x4E, 0x16,
+        0xB3,
+    ];
+    let tag_24 = [
+        0x74, 0x99, 0x3B, 0x31, 0x06, 0xBA, 0x6B, 0xE5, 0x00, 0x8F, 0xD5, 0x3A, 0xA4, 0x91, 0xAA,
+        0xAF,
+    ];
+
+    let device = test_setup();
+
+    match is_chip_version_608(&device) {
+        Ok(true) => {
+            let result = device.import_key(KeyType::Aes, &aes_key, AES_KEY_SLOT_IDX);
+            if result != AtcaStatus::AtcaSuccess {
+                assert_eq!(device.release().to_string(), "AtcaSuccess");
+                panic!(
+                    "failed to load AES key into chip - error: {}",
+                    result.to_string()
+                );
+            }
+        }
+        Ok(false) => (),
+        Err(err) => {
+            assert_eq!(device.release().to_string(), "AtcaSuccess");
+            panic!("is_chip_version_608() error: {}", err.to_string());
+        }
+    }
+
+    let expected_32: AtcaStatus;
+    let expected_24: AtcaStatus;
+    let expected_32_internal_key: AtcaStatus;
+    let expected_24_internal_key: AtcaStatus;
+    let param_32 = AeadParam {
+        nonce: iv.to_vec(),
+        key: Some(aes_key),
+        tag: Some(tag_32),
+        additional_data: Some(aad.to_vec()),
+        ..Default::default()
+    };
+    let param_24 = AeadParam {
+        nonce: iv.to_vec(),
+        key: Some(aes_key),
+        tag: Some(tag_24),
+        additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
+        ..Default::default()
+    };
+    let param_32_internal_key = AeadParam {
+        nonce: iv.to_vec(),
+        tag: Some(tag_32),
+        additional_data: Some(aad.to_vec()),
+        ..Default::default()
+    };
+    let param_24_internal_key = AeadParam {
+        nonce: iv.to_vec(),
+        tag: Some(tag_24),
+        additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
+        ..Default::default()
+    };
+
+    let mut data_32: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
+    data_32.clone_from_slice(&cipher_text);
+    let mut data_24: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
+    data_24.clone_from_slice(&cipher_text[..DATA_24_SIZE]);
+
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_32),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_32,
+    ) {
+        Ok(tag_is_ok) => {
+            assert_eq!(tag_is_ok, true);
+            assert_eq!(data_32, plain_text);
+            expected_32 = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_32 = err,
+    }
+
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_24),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_24,
+    ) {
+        Ok(tag_is_ok) => {
+            assert_eq!(tag_is_ok, true);
+            assert_eq!(data_24.to_vec(), plain_text[..DATA_24_SIZE].to_vec());
+            expected_24 = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_24 = err,
+    }
+
+    data_32.clone_from_slice(&cipher_text);
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_32_internal_key),
+        AES_KEY_SLOT_IDX,
+        &mut data_32,
+    ) {
+        Ok(tag_is_ok) => {
+            assert_eq!(tag_is_ok, true);
+            assert_eq!(data_32, plain_text);
+            expected_32_internal_key = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_32_internal_key = err,
+    }
+
+    data_24.clone_from_slice(&cipher_text[..DATA_24_SIZE]);
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_24_internal_key),
+        AES_KEY_SLOT_IDX,
+        &mut data_24,
+    ) {
+        Ok(tag_is_ok) => {
+            assert_eq!(tag_is_ok, true);
+            assert_eq!(data_24.to_vec(), plain_text[..DATA_24_SIZE].to_vec());
+            expected_24_internal_key = AtcaStatus::AtcaSuccess;
+        }
+        Err(err) => expected_24_internal_key = err,
+    }
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(expected_32, AtcaStatus::AtcaSuccess);
+    assert_eq!(expected_24, AtcaStatus::AtcaSuccess);
+    assert_eq!(expected_32_internal_key, AtcaStatus::AtcaSuccess);
+    assert_eq!(expected_24_internal_key, AtcaStatus::AtcaSuccess);
 }
 
 #[test]

@@ -76,6 +76,40 @@ impl Default for VerifyEcdsaParam {
     }
 }
 
+///
+#[derive(Clone, Debug, PartialEq)]
+pub enum AeadAlgorithm {
+    Ccm(AeadParam),
+    Gcm(AeadParam),
+}
+
+///
+#[derive(Clone, Debug, PartialEq)]
+pub struct AeadParam {
+    /// Nonce [number used once]
+    pub nonce: Vec<u8>,
+    /// Size of counter in IV in bytes. 4 bytes is a common size
+    pub counter_size: u8,
+    /// 
+    pub key: Option<[u8; ATCA_AES_KEY_SIZE]>,
+    ///
+    pub tag: Option<[u8; ATCA_AES_KEY_SIZE]>,
+    /// Additional data that will be authenticated but not encrypted
+    pub additional_data: Option<Vec<u8>>,
+}
+
+impl Default for AeadParam {
+    fn default() -> AeadParam {
+        AeadParam {
+            nonce: Vec::new(),
+            counter_size: (ATCA_AES_DATA_SIZE - ATCA_AES_GCM_IV_STD_LENGTH) as u8,
+            key: None,
+            tag: None,
+            additional_data: None,
+        }
+    }
+}
+
 /// structure that stores data for options supported by the chip
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ChipOptions {

@@ -1,9 +1,10 @@
 use super::{
-    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus, AteccDeviceTrait,
-    InfoCmdType, KeyType, NonceTarget, OutputProtectionState, SignMode, VerifyMode,
+    AeadAlgorithm, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus,
+    AteccDeviceTrait, InfoCmdType, KeyType, NonceTarget, OutputProtectionState, SignMode,
+    VerifyMode,
 };
 
-use super::{ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
+use super::{ATCA_AES_DATA_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 use rand::{distributions::Standard, Rng};
 
 pub struct AteccDevice {
@@ -85,6 +86,30 @@ impl AteccDeviceTrait for AteccDevice {
         _mode: VerifyMode,
         _hash: &[u8],
         _signature: &[u8],
+    ) -> Result<bool, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(true),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    ///
+    fn aead_encrypt(
+        &self,
+        _algorithm: AeadAlgorithm,
+        _slot_id: u8,
+        _data: &mut [u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(vec![0; ATCA_AES_DATA_SIZE]),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    ///
+    fn aead_decrypt(
+        &self,
+        _algorithm: AeadAlgorithm,
+        _slot_id: u8,
+        _data: &mut [u8],
     ) -> Result<bool, AtcaStatus> {
         match self.dev_type {
             AtcaDeviceType::AtcaTestDevSuccess => Ok(true),

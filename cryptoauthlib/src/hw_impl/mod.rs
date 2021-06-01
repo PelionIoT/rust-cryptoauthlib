@@ -1,22 +1,27 @@
 use std::cell::RefCell;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::convert::{From, TryFrom};
+use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Mutex;
 
 use super::{
-    AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceType, AtcaSlot,
-    AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions, EccKeyAttr, InfoCmdType, KeyType,
-    NonceTarget, OutputProtectionState, ReadKey, SignMode, SlotConfig, VerifyMode, WriteConfig,
+    AeadAlgorithm, AeadParam, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceType,
+    AtcaSlot, AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions, EccKeyAttr, InfoCmdType,
+    KeyType, NonceTarget, OutputProtectionState, ReadKey, SignMode, SlotConfig, VerifyMode,
+    WriteConfig,
 };
 use super::{
-    ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY,
-    ATCA_ATECC_PRIV_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT,
-    ATCA_ATECC_TEMPKEY_KEYID, ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE, ATCA_KEY_SIZE,
-    ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA, ATCA_NONCE_NUMIN_SIZE, ATCA_NONCE_SIZE,
-    ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE, ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE,
-    ATCA_ZONE_CONFIG, ATCA_ZONE_DATA,
+    ATCA_AES_DATA_SIZE, ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE,
+    ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY, ATCA_ATECC_PRIV_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE,
+    ATCA_ATECC_SLOTS_COUNT, ATCA_ATECC_TEMPKEY_KEYID, ATCA_ATSHA_CONFIG_BUFFER_SIZE,
+    ATCA_BLOCK_SIZE, ATCA_KEY_SIZE, ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA,
+    ATCA_NONCE_NUMIN_SIZE, ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE,
+    ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG, ATCA_ZONE_DATA,
 };
+
+use cryptoauthlib_sys::atca_aes_gcm_ctx_t;
 
 mod c2rust;
 mod rust2c;
@@ -157,6 +162,28 @@ impl AteccDeviceTrait for AteccDevice {
     ) -> Result<bool, AtcaStatus> {
         self.verify_hash(mode, hash, signature)
     } // AteccDevice::verify_hash()
+
+    ///
+    /// Trait implementation
+    fn aead_encrypt(
+        &self,
+        algorithm: AeadAlgorithm,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        self.aead_encrypt(algorithm, slot_id, data)
+    }
+
+    ///
+    /// Trait implementation
+    fn aead_decrypt(
+        &self,
+        algorithm: AeadAlgorithm,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<bool, AtcaStatus> {
+        self.aead_decrypt(algorithm, slot_id, data)
+    }
 
     /// Request ATECC to return own device type
     /// Trait implementation
@@ -462,11 +489,22 @@ impl AteccDevice {
     /// Digest Buffer (32 or 64 bytes), or the Alternate Key Buffer (32 bytes). For
     /// all other devices, only TempKey (32 bytes) is available.
     fn nonce(&self, target: NonceTarget, data: &[u8]) -> AtcaStatus {
-        if (self.get_device_type() != AtcaDeviceType::ATECC608A)
-            && (target != NonceTarget::TempKey)
-            && (data.len() != ATCA_NONCE_SIZE)
+        if (self.get_device_type() != AtcaDeviceType::ATECC608A) && (target != NonceTarget::TempKey)
         {
             return AtcaStatus::AtcaBadParam;
+        }
+        let dev_type_608: bool = AtcaDeviceType::ATECC608A == self.get_device_type();
+        let alt_key_buff: bool = NonceTarget::AltKeyBuf == target;
+        let no_len_32: bool = data.len() != ATCA_NONCE_SIZE;
+        let no_len_64: bool = data.len() != (2 * ATCA_NONCE_SIZE);
+
+        if !dev_type_608 && alt_key_buff
+            || alt_key_buff && no_len_32
+            || !dev_type_608 && !no_len_64
+            || no_len_32 && no_len_64
+            || !no_len_32 && !no_len_64
+        {
+            return AtcaStatus::AtcaInvalidSize;
         }
         AtcaStatus::from(unsafe {
             let _guard = self
@@ -826,6 +864,48 @@ impl AteccDevice {
         }
     } // AteccDevice::verify_hash()
 
+    ///
+    fn aead_encrypt(
+        &self,
+        algorithm: AeadAlgorithm,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        if !self.is_aes_enabled() {
+            // If chip does not support AES hardware encryption, the operation cannot be performed
+            return Err(AtcaStatus::AtcaFuncFail);
+        }
+        if slot_id > ATCA_ATECC_SLOTS_COUNT {
+            return Err(AtcaStatus::AtcaInvalidId);
+        }
+
+        match algorithm {
+            AeadAlgorithm::Ccm(aead_param) => self.encrypt_aes_ccm(aead_param, slot_id, data),
+            AeadAlgorithm::Gcm(aead_param) => self.encrypt_aes_gcm(aead_param, slot_id, data),
+        }
+    }
+
+    ///
+    fn aead_decrypt(
+        &self,
+        algorithm: AeadAlgorithm,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<bool, AtcaStatus> {
+        if !self.is_aes_enabled() {
+            // If chip does not support AES hardware encryption, the operation cannot be performed
+            return Err(AtcaStatus::AtcaFuncFail);
+        }
+        if slot_id > ATCA_ATECC_SLOTS_COUNT {
+            return Err(AtcaStatus::AtcaInvalidId);
+        }
+
+        match algorithm {
+            AeadAlgorithm::Ccm(aead_param) => self.decrypt_aes_ccm(aead_param, slot_id, data),
+            AeadAlgorithm::Gcm(aead_param) => self.decrypt_aes_gcm(aead_param, slot_id, data),
+        }
+    }
+
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType {
         AtcaDeviceType::from(unsafe {
@@ -1037,6 +1117,392 @@ impl AteccDevice {
     // ---------------------------------------------------------------
     // Private functions
     // ---------------------------------------------------------------
+
+    ///
+    fn encrypt_aes_ccm(
+        &self,
+        _aead_param: AeadParam,
+        _slot_id: u8,
+        _data: &mut [u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        Err(AtcaStatus::AtcaUnimplemented)
+    }
+
+    ///
+    fn decrypt_aes_ccm(
+        &self,
+        _aead_param: AeadParam,
+        _slot_id: u8,
+        _data: &mut [u8],
+    ) -> Result<bool, AtcaStatus> {
+        Err(AtcaStatus::AtcaUnimplemented)
+    }
+
+    ///
+    fn encrypt_aes_gcm(
+        &self,
+        aead_param: AeadParam,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        let mut ctx: atca_aes_gcm_ctx_t;
+
+        match self.common_aes_gcm(aead_param, slot_id, data) {
+            Err(err) => return Err(err),
+            Ok(val) => ctx = val,
+        }
+
+        if !data.is_empty() {
+            let mut start_pos: usize = 0;
+            let mut shift: usize = min(data.len(), ATCA_AES_DATA_SIZE);
+
+            while shift > 0 {
+                let block = &data[start_pos..(start_pos + shift)];
+                let mut encr_block: [u8; ATCA_AES_DATA_SIZE] = [0; ATCA_AES_DATA_SIZE];
+
+                match self.aes_gcm_encrypt_update(ctx, &block, &mut encr_block) {
+                    Err(err) => return Err(err),
+                    Ok(val) => {
+                        ctx = val;
+                        data[start_pos..(shift + start_pos)].clone_from_slice(&encr_block[..shift]);
+
+                        start_pos += shift;
+                        let remaining_bytes = data.len() - start_pos;
+                        if 0 == remaining_bytes {
+                            shift = 0
+                        } else if remaining_bytes < ATCA_AES_DATA_SIZE {
+                            shift = remaining_bytes
+                        }
+                    }
+                }
+            }
+        }
+
+        match self.aes_gcm_encrypt_finish(ctx) {
+            Err(err) => Err(err),
+            Ok(tag) => Ok(tag),
+        }
+    }
+
+    ///
+    fn decrypt_aes_gcm(
+        &self,
+        aead_param: AeadParam,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<bool, AtcaStatus> {
+        let mut tag_to_check: [u8; 16] = [0; 16];
+
+        if aead_param.tag.is_none() {
+            return Err(AtcaStatus::AtcaBadParam);
+        } else if let Some(tag) = &aead_param.tag {
+            tag_to_check.clone_from_slice(&tag[..])
+        }
+
+        let mut ctx: atca_aes_gcm_ctx_t;
+
+        match self.common_aes_gcm(aead_param, slot_id, data) {
+            Err(err) => return Err(err),
+            Ok(val) => ctx = val,
+        }
+
+        if !data.is_empty() {
+            let mut start_pos: usize = 0;
+            let mut shift: usize = min(data.len(), ATCA_AES_DATA_SIZE);
+
+            while shift > 0 {
+                let block = &data[start_pos..(start_pos + shift)];
+                let mut encr_block: [u8; ATCA_AES_DATA_SIZE] = [0; ATCA_AES_DATA_SIZE];
+
+                match self.aes_gcm_decrypt_update(ctx, &block, &mut encr_block) {
+                    Err(err) => return Err(err),
+                    Ok(val) => {
+                        ctx = val;
+                        data[start_pos..(shift + start_pos)].clone_from_slice(&encr_block[..shift]);
+
+                        start_pos += shift;
+                        let remaining_bytes = data.len() - start_pos;
+                        if 0 == remaining_bytes {
+                            shift = 0
+                        } else if remaining_bytes < ATCA_AES_DATA_SIZE {
+                            shift = remaining_bytes
+                        }
+                    }
+                }
+            }
+        }
+
+        match self.aes_gcm_decrypt_finish(ctx, &tag_to_check) {
+            Err(err) => Err(err),
+            Ok(is_verified) => Ok(is_verified),
+        }
+    }
+
+    ///
+    fn common_aes_gcm(
+        &self,
+        aead_param: AeadParam,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
+        const MAX_COUNTER_BYTES: u8 = 4;
+
+        if (slot_id > ATCA_ATECC_SLOTS_COUNT)
+            || ((slot_id < ATCA_ATECC_SLOTS_COUNT)
+                && (self.slots[slot_id as usize].config.key_type != KeyType::Aes))
+        {
+            return Err(AtcaStatus::AtcaInvalidId);
+        }
+        if ((ATCA_ATECC_SLOTS_COUNT == slot_id) && aead_param.key.is_none())
+            || (aead_param.counter_size > MAX_COUNTER_BYTES)
+        {
+            return Err(AtcaStatus::AtcaBadParam);
+        }
+        if data.is_empty() && aead_param.additional_data.is_none() {
+            return Err(AtcaStatus::AtcaInvalidSize);
+        }
+
+        let mut ctx: atca_aes_gcm_ctx_t;
+
+        let mut result = AtcaStatus::AtcaSuccess;
+        if let Some(val) = &aead_param.key {
+            let mut key: Vec<u8> = val.to_vec();
+            key.resize_with(ATCA_NONCE_SIZE, || 0x00);
+            result = self.nonce(NonceTarget::TempKey, &key)
+        }
+
+        if AtcaStatus::AtcaSuccess != result {
+            return Err(result);
+        } else {
+            let iv: Vec<u8> = aead_param.nonce;
+            if iv.len() != (ATCA_AES_DATA_SIZE - aead_param.counter_size as usize) {
+                return Err(AtcaStatus::AtcaInvalidSize);
+            }
+            match self.aes_gcm_init(slot_id, &iv) {
+                Ok(val) => ctx = val,
+                Err(err) => return Err(err),
+            };
+        }
+
+        if let Some(data_to_sign) = &aead_param.additional_data {
+            let mut start_pos: usize = 0;
+            let mut shift: usize = min(data_to_sign.len(), ATCA_AES_DATA_SIZE);
+            while shift > 0 {
+                let block = &data_to_sign[start_pos..(start_pos + shift)];
+                match self.aes_gcm_aad_update(ctx, &block) {
+                    Err(err) => return Err(err),
+                    Ok(val) => {
+                        ctx = val;
+                        start_pos += shift;
+                        let remaining_bytes = data_to_sign.len() - start_pos;
+                        if 0 == remaining_bytes {
+                            shift = 0
+                        } else if remaining_bytes < ATCA_AES_DATA_SIZE {
+                            shift = remaining_bytes
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(ctx)
+    }
+
+    ///
+    fn aes_gcm_ctx_init(&self) -> atca_aes_gcm_ctx_t {
+        let ctx = MaybeUninit::<atca_aes_gcm_ctx_t>::zeroed();
+
+        unsafe { ctx.assume_init() }
+    }
+
+    ///
+    fn aes_gcm_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
+        const BLOCK_IDX: u8 = 0;
+
+        let mut slot = slot_id as u16;
+        if slot_id == ATCA_ATECC_SLOTS_COUNT {
+            slot = ATCA_ATECC_TEMPKEY_KEYID;
+        }
+
+        let ctx_ptr = Box::into_raw(Box::new(self.aes_gcm_ctx_init()));
+
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_aes_gcm_init(
+                ctx_ptr,
+                slot,
+                BLOCK_IDX,
+                iv.as_ptr(),
+                iv.len() as u64,
+            )
+        });
+
+        match result {
+            AtcaStatus::AtcaSuccess => Ok({
+                let result = unsafe { *ctx_ptr };
+                unsafe { Box::from_raw(ctx_ptr) };
+                result
+            }),
+            _ => Err(result),
+        }
+    }
+
+    ///
+    fn aes_gcm_aad_update(
+        &self,
+        ctx: atca_aes_gcm_ctx_t,
+        data: &[u8],
+    ) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
+        if data.len() > ATCA_AES_DATA_SIZE {
+            return Err(AtcaStatus::AtcaInvalidSize);
+        }
+
+        let ctx_ptr = Box::into_raw(Box::new(ctx));
+
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_aes_gcm_aad_update(ctx_ptr, data.as_ptr(), data.len() as u32)
+        });
+
+        let ctx = unsafe { *ctx_ptr };
+        unsafe { Box::from_raw(ctx_ptr) };
+
+        match result {
+            AtcaStatus::AtcaSuccess => Ok(ctx),
+            _ => Err(result),
+        }
+    } // AteccDevice::aes_gcm_aad_update()
+
+    ///
+    fn aes_gcm_encrypt_update(
+        &self,
+        ctx: atca_aes_gcm_ctx_t,
+        data: &[u8],
+        encrypted: &mut [u8; ATCA_AES_DATA_SIZE],
+    ) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
+        if data.len() > ATCA_AES_DATA_SIZE {
+            return Err(AtcaStatus::AtcaInvalidSize);
+        }
+
+        let ctx_ptr = Box::into_raw(Box::new(ctx));
+        *encrypted = [0; ATCA_AES_DATA_SIZE];
+
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_aes_gcm_encrypt_update(
+                ctx_ptr,
+                data.as_ptr(),
+                data.len() as u32,
+                encrypted.as_mut_ptr(),
+            )
+        });
+
+        let ctx = unsafe { *ctx_ptr };
+        unsafe { Box::from_raw(ctx_ptr) };
+
+        match result {
+            AtcaStatus::AtcaSuccess => Ok(ctx),
+            _ => Err(result),
+        }
+    } // AteccDevice::aes_gcm_encrypt_update()
+
+    fn aes_gcm_decrypt_update(
+        &self,
+        ctx: atca_aes_gcm_ctx_t,
+        data: &[u8],
+        encrypted: &mut [u8; ATCA_AES_DATA_SIZE],
+    ) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
+        if data.len() > ATCA_AES_DATA_SIZE {
+            return Err(AtcaStatus::AtcaInvalidSize);
+        }
+
+        let ctx_ptr = Box::into_raw(Box::new(ctx));
+        *encrypted = [0; ATCA_AES_DATA_SIZE];
+
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_aes_gcm_decrypt_update(
+                ctx_ptr,
+                data.as_ptr(),
+                data.len() as u32,
+                encrypted.as_mut_ptr(),
+            )
+        });
+
+        let ctx = unsafe { *ctx_ptr };
+        unsafe { Box::from_raw(ctx_ptr) };
+
+        match result {
+            AtcaStatus::AtcaSuccess => Ok(ctx),
+            _ => Err(result),
+        }
+    } // AteccDevice::aes_gcm_decrypt_update()
+
+    fn aes_gcm_encrypt_finish(&self, ctx: atca_aes_gcm_ctx_t) -> Result<Vec<u8>, AtcaStatus> {
+        let ctx_ptr = Box::into_raw(Box::new(ctx));
+        let mut tag: [u8; ATCA_AES_DATA_SIZE] = [0; ATCA_AES_DATA_SIZE];
+
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_aes_gcm_encrypt_finish(
+                ctx_ptr,
+                tag.as_mut_ptr(),
+                tag.len() as u64,
+            )
+        });
+
+        unsafe { Box::from_raw(ctx_ptr) };
+
+        match result {
+            AtcaStatus::AtcaSuccess => Ok(tag.to_vec()),
+            _ => Err(result),
+        }
+    } // AteccDevice::aes_gcm_encrypt_finish()
+
+    ///
+    fn aes_gcm_decrypt_finish(
+        &self,
+        ctx: atca_aes_gcm_ctx_t,
+        tag: &[u8; ATCA_AES_KEY_SIZE],
+    ) -> Result<bool, AtcaStatus> {
+        let ctx_ptr = Box::into_raw(Box::new(ctx));
+        let mut is_verified: bool = false;
+
+        let result = AtcaStatus::from(unsafe {
+            let _guard = self
+                .api_mutex
+                .lock()
+                .expect("Could not lock atcab API mutex");
+            cryptoauthlib_sys::atcab_aes_gcm_decrypt_finish(
+                ctx_ptr,
+                tag.as_ptr(),
+                tag.len() as u64,
+                &mut is_verified,
+            )
+        });
+
+        unsafe { Box::from_raw(ctx_ptr) };
+
+        match result {
+            AtcaStatus::AtcaSuccess => Ok(is_verified),
+            _ => Err(result),
+        }
+    }
 
     /// Function that reads a key of the 'Aes' type from the indicated slot
     fn read_aes_key_from_slot(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {

@@ -3,8 +3,9 @@ use serial_test::serial;
 
 // Types
 use super::{
-    AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaSlot, AtcaStatus, AteccDevice,
-    InfoCmdType, KeyType, NonceTarget, SignEcdsaParam, SignMode, VerifyEcdsaParam, VerifyMode,
+    AeadAlgorithm, AeadParam, AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaSlot,
+    AtcaStatus, AteccDevice, InfoCmdType, KeyType, NonceTarget, SignEcdsaParam, SignMode,
+    VerifyEcdsaParam, VerifyMode,
 };
 // Constants
 use super::{

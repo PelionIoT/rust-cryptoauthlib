@@ -20,8 +20,12 @@ pub const ATCA_SERIAL_NUM_SIZE: usize = cryptoauthlib_sys::ATCA_SERIAL_NUM_SIZE 
 /// ATECC/ATSHA temporary key slot identifier
 pub const ATCA_ATECC_TEMPKEY_KEYID: u16 = cryptoauthlib_sys::ATCA_TEMPKEY_KEYID as u16;
 pub const ATCA_KEY_SIZE: usize = cryptoauthlib_sys::ATCA_KEY_SIZE as usize;
+/// Size (in bytes) of AES data block
+pub const ATCA_AES_DATA_SIZE:usize = cryptoauthlib_sys::AES_DATA_SIZE as usize;
 /// Size (in bytes) of AES key
 pub const ATCA_AES_KEY_SIZE: usize = cryptoauthlib_sys::AES_DATA_SIZE as usize;
+///
+pub const ATCA_AES_GCM_IV_STD_LENGTH: usize = cryptoauthlib_sys::ATCA_AES_GCM_IV_STD_LENGTH as usize;
 /// Size (in bytes) of SHA hash
 pub const ATCA_SHA2_256_DIGEST_SIZE: usize = cryptoauthlib_sys::ATCA_SHA2_256_DIGEST_SIZE as usize;
 /// Private key size (in bytes) for elliptic curve P256 supported by ATECC

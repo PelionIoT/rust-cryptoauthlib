@@ -49,6 +49,20 @@ pub trait AteccDeviceTrait {
         hash: &[u8],
         signature: &[u8],
     ) -> Result<bool, AtcaStatus>;
+    ///
+    fn aead_encrypt(
+        &self,
+        algorithm: AeadAlgorithm,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<Vec<u8>, AtcaStatus>;
+    ///
+    fn aead_decrypt(
+        &self,
+        algorithm: AeadAlgorithm,
+        slot_id: u8,
+        data: &mut [u8],
+    ) -> Result<bool, AtcaStatus>;
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
