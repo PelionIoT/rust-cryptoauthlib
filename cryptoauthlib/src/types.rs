@@ -86,13 +86,13 @@ pub enum AeadAlgorithm {
 ///
 #[derive(Clone, Debug, PartialEq)]
 pub struct AeadParam {
-    /// Nonce [number used once]
+    /// Nonce [number used once aka IV] (default length is 12 bytes)
     pub nonce: Vec<u8>,
     /// Size of counter in IV in bytes. 4 bytes is a common size
     pub counter_size: u8,
-    /// 
+    /// external encryption/decryption key needed when an AES key stored in the cryptochip is not used
     pub key: Option<[u8; ATCA_AES_KEY_SIZE]>,
-    ///
+    /// tag to verify authenticity of decrypted data (16 bytes)
     pub tag: Option<[u8; ATCA_AES_KEY_SIZE]>,
     /// Additional data that will be authenticated but not encrypted
     pub additional_data: Option<Vec<u8>>,

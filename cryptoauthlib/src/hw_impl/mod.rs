@@ -725,6 +725,9 @@ impl AteccDevice {
     /// public key based on an existing private key in the socket
     /// or exports the public key directly
     fn get_public_key(&self, slot_id: u8, public_key: &mut Vec<u8>) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(true) {
+            return AtcaStatus::AtcaNotLocked;
+        }
         if self.slots[slot_id as usize].config.key_type != KeyType::P256EccKey {
             return AtcaStatus::AtcaBadParam;
         }
@@ -871,9 +874,12 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<Vec<u8>, AtcaStatus> {
+        if self.check_that_configuration_is_not_locked(true) {
+            return Err(AtcaStatus::AtcaNotLocked);
+        }
         if !self.is_aes_enabled() {
             // If chip does not support AES hardware encryption, the operation cannot be performed
-            return Err(AtcaStatus::AtcaFuncFail);
+            return Err(AtcaStatus::AtcaBadParam);
         }
         if slot_id > ATCA_ATECC_SLOTS_COUNT {
             return Err(AtcaStatus::AtcaInvalidId);
@@ -892,9 +898,12 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<bool, AtcaStatus> {
+        if self.check_that_configuration_is_not_locked(true) {
+            return Err(AtcaStatus::AtcaNotLocked);
+        }
         if !self.is_aes_enabled() {
             // If chip does not support AES hardware encryption, the operation cannot be performed
-            return Err(AtcaStatus::AtcaFuncFail);
+            return Err(AtcaStatus::AtcaBadParam);
         }
         if slot_id > ATCA_ATECC_SLOTS_COUNT {
             return Err(AtcaStatus::AtcaInvalidId);
@@ -1138,7 +1147,7 @@ impl AteccDevice {
         Err(AtcaStatus::AtcaUnimplemented)
     }
 
-    ///
+    /// function that performs encryption in AES GCM mode
     fn encrypt_aes_gcm(
         &self,
         aead_param: AeadParam,
@@ -1184,7 +1193,7 @@ impl AteccDevice {
         }
     }
 
-    ///
+    /// function that performs decryption in AES GCM mode
     fn decrypt_aes_gcm(
         &self,
         aead_param: AeadParam,
@@ -1238,7 +1247,7 @@ impl AteccDevice {
         }
     }
 
-    ///
+    /// a helper function implementing common functionality for AES GCM encryption and decryption
     fn common_aes_gcm(
         &self,
         aead_param: AeadParam,
@@ -1308,14 +1317,14 @@ impl AteccDevice {
         Ok(ctx)
     }
 
-    ///
+    /// function initializing the structure for AES GCM passed to C library from Microchip
     fn aes_gcm_ctx_init(&self) -> atca_aes_gcm_ctx_t {
         let ctx = MaybeUninit::<atca_aes_gcm_ctx_t>::zeroed();
 
         unsafe { ctx.assume_init() }
     }
 
-    ///
+    /// a helper function that initiates the AES GCM mode
     fn aes_gcm_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
         const BLOCK_IDX: u8 = 0;
 
@@ -1350,7 +1359,7 @@ impl AteccDevice {
         }
     }
 
-    ///
+    /// a helper function processing data block for authentication in AES GCM mode.
     fn aes_gcm_aad_update(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -1379,7 +1388,7 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_aad_update()
 
-    ///
+    /// auxiliary function encrypting data block in AES GCM mode.
     fn aes_gcm_encrypt_update(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -1415,6 +1424,7 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_encrypt_update()
 
+    /// auxiliary function that decrypts data block in AES GCM mode
     fn aes_gcm_decrypt_update(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -1450,6 +1460,7 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_decrypt_update()
 
+    /// auxiliary function that ends encryption in AES GCM mode
     fn aes_gcm_encrypt_finish(&self, ctx: atca_aes_gcm_ctx_t) -> Result<Vec<u8>, AtcaStatus> {
         let ctx_ptr = Box::into_raw(Box::new(ctx));
         let mut tag: [u8; ATCA_AES_DATA_SIZE] = [0; ATCA_AES_DATA_SIZE];
@@ -1474,7 +1485,7 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_encrypt_finish()
 
-    ///
+    /// auxiliary function completing AES GCM decryption
     fn aes_gcm_decrypt_finish(
         &self,
         ctx: atca_aes_gcm_ctx_t,
