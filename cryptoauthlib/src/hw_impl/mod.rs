@@ -7,10 +7,10 @@ use std::ptr;
 use std::sync::Mutex;
 
 use super::{
-    AeadAlgorithm, AeadParam, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper, AtcaIfaceType,
-    AtcaSlot, AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions, EccKeyAttr, InfoCmdType,
-    KeyType, NonceTarget, OutputProtectionState, ReadKey, SignMode, SlotConfig, VerifyMode,
-    WriteConfig,
+    AeadAlgorithm, AeadParam, AtcaAesCcmCtx, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper,
+    AtcaIfaceType, AtcaSlot, AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions,
+    EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState, ReadKey, SignMode,
+    SlotConfig, VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_AES_KEY_SIZE, ATCA_ATECC_CONFIG_BUFFER_SIZE,
@@ -18,7 +18,7 @@ use super::{
     ATCA_ATECC_SLOTS_COUNT, ATCA_ATECC_TEMPKEY_KEYID, ATCA_ATSHA_CONFIG_BUFFER_SIZE,
     ATCA_BLOCK_SIZE, ATCA_KEY_SIZE, ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA,
     ATCA_NONCE_NUMIN_SIZE, ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE,
-    ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG, ATCA_ZONE_DATA,
+    ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG, ATCA_ZONE_DATA, ATCA_AES_GCM_IV_STD_LENGTH, 
 };
 
 use cryptoauthlib_sys::atca_aes_gcm_ctx_t;
@@ -163,7 +163,7 @@ impl AteccDeviceTrait for AteccDevice {
         self.verify_hash(mode, hash, signature)
     } // AteccDevice::verify_hash()
 
-    ///
+    /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     /// Trait implementation
     fn aead_encrypt(
         &self,
@@ -174,7 +174,7 @@ impl AteccDeviceTrait for AteccDevice {
         self.aead_encrypt(algorithm, slot_id, data)
     }
 
-    ///
+    /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     /// Trait implementation
     fn aead_decrypt(
         &self,
@@ -867,7 +867,7 @@ impl AteccDevice {
         }
     } // AteccDevice::verify_hash()
 
-    ///
+    /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_encrypt(
         &self,
         algorithm: AeadAlgorithm,
@@ -891,7 +891,7 @@ impl AteccDevice {
         }
     }
 
-    ///
+    /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_decrypt(
         &self,
         algorithm: AeadAlgorithm,
@@ -1254,7 +1254,8 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
-        const MAX_COUNTER_BYTES: u8 = 4;
+        const MAX_IV_SIZE: usize = ATCA_AES_DATA_SIZE - 1;
+        const MIN_IV_SIZE: usize = ATCA_AES_GCM_IV_STD_LENGTH;
 
         if (slot_id > ATCA_ATECC_SLOTS_COUNT)
             || ((slot_id < ATCA_ATECC_SLOTS_COUNT)
@@ -1262,12 +1263,12 @@ impl AteccDevice {
         {
             return Err(AtcaStatus::AtcaInvalidId);
         }
-        if ((ATCA_ATECC_SLOTS_COUNT == slot_id) && aead_param.key.is_none())
-            || (aead_param.counter_size > MAX_COUNTER_BYTES)
-        {
+        if (ATCA_ATECC_SLOTS_COUNT == slot_id) && aead_param.key.is_none() {
             return Err(AtcaStatus::AtcaBadParam);
         }
-        if data.is_empty() && aead_param.additional_data.is_none() {
+        if (data.is_empty() && aead_param.additional_data.is_none())
+            || (aead_param.nonce.len() < MIN_IV_SIZE || aead_param.nonce.len() > MAX_IV_SIZE)
+        {
             return Err(AtcaStatus::AtcaInvalidSize);
         }
 
@@ -1284,9 +1285,6 @@ impl AteccDevice {
             return Err(result);
         } else {
             let iv: Vec<u8> = aead_param.nonce;
-            if iv.len() != (ATCA_AES_DATA_SIZE - aead_param.counter_size as usize) {
-                return Err(AtcaStatus::AtcaInvalidSize);
-            }
             match self.aes_gcm_init(slot_id, &iv) {
                 Ok(val) => ctx = val,
                 Err(err) => return Err(err),
@@ -1513,6 +1511,133 @@ impl AteccDevice {
             AtcaStatus::AtcaSuccess => Ok(is_verified),
             _ => Err(result),
         }
+    }
+
+    ///
+    fn _aes_ccm_init(
+        &self,
+        _slot_id: u8,
+        iv: &[u8],
+        aad_size: usize,
+        text_size: usize,
+        tag_size: usize,
+    ) -> Result<AtcaAesCcmCtx, AtcaStatus> {
+        // Length/nonce field specifications according to rfc3610.
+        if iv.is_empty() || iv.len() < 7 || iv.len() > 13 {
+            return Err(AtcaStatus::AtcaBadParam);
+        }
+
+        // Auth field specifications according to rfc3610.
+        if !(3..=ATCA_AES_DATA_SIZE).contains(&tag_size) || (tag_size % 2 != 0) {
+            return Err(AtcaStatus::AtcaBadParam);
+        }
+
+        // First block B of 16 bytes consisting of flags, nonce and l(m).
+        let mut b: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+        let mut counter: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+        let mut ctx: AtcaAesCcmCtx = AtcaAesCcmCtx {
+            iv_size: iv.len() as u8,
+            ..Default::default()
+        };
+
+        // --------------------- Init sequence for authentication .......................//
+        // Encoding the number of bytes in auth field.
+        let m = ((tag_size - 2) / 2) as u8;
+        // Encoding the number of bytes in length field.
+        let l = (ATCA_AES_DATA_SIZE - iv.len() - 1 - 1) as u8;
+
+        // Store M value in ctx for later use.
+        ctx.m = m;
+
+        //   ----------------------
+        //   Bit Number   Contents
+        //   ----------   ----------------------
+        //   7            Reserved (always zero)
+        //   6            Adata
+        //   5 ... 3      M'
+        //   2 ... 0      L'
+        //   -----------------------
+        // Formatting flag field
+        b[0] = l | (m << 3) | (((aad_size > 0) as u8) << 6);
+
+        //   ----------------------
+        //   Octet Number   Contents
+        //   ------------   ---------
+        //   0              Flags
+        //   1 ... 15-L     Nonce N
+        //   16-L ... 15    l(m)
+        //   -----------------------
+
+        // Copying the IV into the nonce field.
+        b[1..].clone_from_slice(&iv);
+
+        // Update length field in B0 block.
+        let mut size_left: usize = text_size;
+        for i in 0..(l + 1) {
+            b[(15 - i) as usize] = (size_left & 0xFF) as u8;
+            size_left >>= 8;
+        }
+
+        // // // Init CBC-MAC context
+        // // status = atcab_aes_cbcmac_init_ext(device, &ctx->cbc_mac_ctx, key_id, key_block);
+        // // if (status != ATCA_SUCCESS)
+        // // {
+        // //     return status;
+        // // }
+
+        // // // Processing initial block B0 through CBC-MAC.
+        // // status = atcab_aes_cbcmac_update(&ctx->cbc_mac_ctx, B, ATCA_AES128_BLOCK_SIZE);
+        // // if (status != ATCA_SUCCESS)
+        // // {
+        // //     return status;
+        // // }
+
+        // Loading AAD size in ctx buffer.
+        ctx.partial_aad[0] = ((aad_size >> 8) & 0xFF) as u8;
+        ctx.partial_aad[1] = (aad_size & 0xFF) as u8;
+        ctx.partial_aad_size = 2;
+
+        // --------------------- Init sequence for encryption/decryption .......................//
+        ctx.text_size = text_size;
+
+        //   ----------------------
+        //   Bit Number   Contents
+        //   ----------   ----------------------
+        //   7            Reserved (always zero)
+        //   6            Reserved (always zero)
+        //   5 ... 3      Zero
+        //   2 ... 0      L'
+        //   -----------------------
+
+        // Updating Flags field
+        counter[0] = l;
+        //   ----------------------
+        //   Octet Number   Contents
+        //   ------------   ---------
+        //   0              Flags
+        //   1 ... 15-L     Nonce N
+        //   16-L ... 15    Counter i
+        //   -----------------------
+        // Formatting to get the initial counter value
+        counter[1..].copy_from_slice(&iv);
+        ctx.counter[..].copy_from_slice(&counter);
+
+        // // Init CTR mode context with the counter value obtained from previous step.
+        // status = atcab_aes_ctr_init_ext(device, &ctx->ctr_ctx, key_id, key_block, (uint8_t)(ATCA_AES128_BLOCK_SIZE - iv_size - 1), counter);
+        // if (status != ATCA_SUCCESS)
+        // {
+        //     return status;
+        // }
+
+        // // Increment the counter to skip the first block, first will be later reused to get tag.
+        // status = atcab_aes_ctr_increment(&ctx->ctr_ctx);
+        // if (status != ATCA_SUCCESS)
+        // {
+        //     return status;
+        // }
+
+        Ok(ctx)
+        // return Err(AtcaStatus::AtcaUnimplemented);
     }
 
     /// Function that reads a key of the 'Aes' type from the indicated slot

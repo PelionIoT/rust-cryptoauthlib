@@ -88,8 +88,6 @@ pub enum AeadAlgorithm {
 pub struct AeadParam {
     /// Nonce [number used once aka IV] (default length is 12 bytes)
     pub nonce: Vec<u8>,
-    /// Size of counter in IV in bytes. 4 bytes is a common size
-    pub counter_size: u8,
     /// external encryption/decryption key needed when an AES key stored in the cryptochip is not used
     pub key: Option<[u8; ATCA_AES_KEY_SIZE]>,
     /// tag to verify authenticity of decrypted data (16 bytes)
@@ -102,7 +100,7 @@ impl Default for AeadParam {
     fn default() -> AeadParam {
         AeadParam {
             nonce: Vec::new(),
-            counter_size: (ATCA_AES_DATA_SIZE - ATCA_AES_GCM_IV_STD_LENGTH) as u8,
+            // counter_size: (ATCA_AES_DATA_SIZE - ATCA_AES_GCM_IV_STD_LENGTH) as u8,
             key: None,
             tag: None,
             additional_data: None,
@@ -110,6 +108,37 @@ impl Default for AeadParam {
     }
 }
 
+///
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct AtcaAesCcmCtx {
+    // pub cbc_mac_ctx: atca_aes_cbcmac_ctx_t          // CBC_MAC context
+    // pub ctr_ctx: atca_aes_ctr_ctx_t                 // CTR context
+    pub iv_size: u8,                                // iv size
+    pub m: u8,                                      // Tag size
+    pub counter: [u8; ATCA_AES_DATA_SIZE],          // Initial counter value
+    pub partial_aad: [u8; ATCA_AES_DATA_SIZE],      // Partial blocks of data waiting to be processed
+    pub partial_aad_size: usize,                    // Amount of data in the partial block buffer
+    pub text_size: usize,                           // Size of data to be processed
+    pub enc_cb: [u8; ATCA_AES_DATA_SIZE],           // Last encrypted counter block
+    pub data_size: u32,                             // Size of the data being encrypted/decrypted in bytes.
+    pub ciphertext_block: [u8; ATCA_AES_DATA_SIZE]  // Last ciphertext block
+}
+
+impl Default for AtcaAesCcmCtx {
+    fn default() -> AtcaAesCcmCtx {
+        AtcaAesCcmCtx {
+            iv_size: ATCA_AES_DATA_SIZE as u8,
+            m: ATCA_AES_DATA_SIZE as u8,
+            counter: [0x00; ATCA_AES_DATA_SIZE],
+            partial_aad: [0x00; ATCA_AES_DATA_SIZE],
+            partial_aad_size: 0,
+            text_size: 0,
+            enc_cb: [0x00; ATCA_AES_DATA_SIZE],
+            data_size: 0,
+            ciphertext_block: [0x00; ATCA_AES_DATA_SIZE],
+        }
+    }
+}
 /// structure that stores data for options supported by the chip
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ChipOptions {

@@ -808,18 +808,17 @@ fn aead_gcm_encrypt_bad_data() {
     };
     let param_bad_2 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
-        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
-        counter_size: 5,
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH - 1],
         ..Default::default()
     };
     let param_bad_3 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
-        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        nonce: vec![0x00; ATCA_AES_KEY_SIZE],
         ..Default::default()
     };
     let param_bad_4 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
-        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH + 1],
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
         ..Default::default()
     };
 
@@ -852,7 +851,7 @@ fn aead_gcm_encrypt_bad_data() {
         expected_bad_1 = AtcaStatus::AtcaInvalidId;
         expected_bad_2 = AtcaStatus::AtcaInvalidId;
         expected_bad_3 = AtcaStatus::AtcaBadParam;
-        expected_bad_4 = AtcaStatus::AtcaBadParam;
+        expected_bad_4 = AtcaStatus::AtcaInvalidSize;
         expected_bad_5 = AtcaStatus::AtcaInvalidSize;
         expected_bad_6 = AtcaStatus::AtcaInvalidSize;
     }
@@ -883,7 +882,7 @@ fn aead_gcm_encrypt_bad_data() {
         Err(err) => result_bad_3 = err,
     }
 
-    // counter size is too big
+    // nonce length is too short
     match device.aead_encrypt(
         AeadAlgorithm::Gcm(param_bad_2),
         ATCA_ATECC_SLOTS_COUNT,
@@ -893,22 +892,22 @@ fn aead_gcm_encrypt_bad_data() {
         Err(err) => result_bad_4 = err,
     }
 
-    // no data to sign and encrypt
-    let mut empty_data: [u8; 0] = [];
+    // nonce length is too long
     match device.aead_encrypt(
         AeadAlgorithm::Gcm(param_bad_3),
         ATCA_ATECC_SLOTS_COUNT,
-        &mut empty_data,
+        &mut data,
     ) {
         Ok(_) => (),
         Err(err) => result_bad_5 = err,
     }
 
-    // bad nonce length
+    // no data to sign and encrypt
+    let mut empty_data: [u8; 0] = [];
     match device.aead_encrypt(
         AeadAlgorithm::Gcm(param_bad_4),
         ATCA_ATECC_SLOTS_COUNT,
-        &mut data,
+        &mut empty_data,
     ) {
         Ok(_) => (),
         Err(err) => result_bad_6 = err,
@@ -971,14 +970,12 @@ fn aead_gcm_decrypt_proper_data() {
         key: Some(aes_key),
         tag: Some(tag_32),
         additional_data: Some(aad.to_vec()),
-        ..Default::default()
     };
     let param_24 = AeadParam {
         nonce: iv.to_vec(),
         key: Some(aes_key),
         tag: Some(tag_24),
         additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
-        ..Default::default()
     };
     let param_32_internal_key = AeadParam {
         nonce: iv.to_vec(),
@@ -1113,7 +1110,6 @@ fn aead_gcm_decrypt_bad_data() {
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
         tag: Some([0x00; ATCA_AES_KEY_SIZE]),
         additional_data: Some(vec![0x00; ATCA_AES_DATA_SIZE]),
-        ..Default::default()
     };
     let param_bad_1 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
@@ -1127,20 +1123,19 @@ fn aead_gcm_decrypt_bad_data() {
     };
     let param_bad_3 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
-        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH - 1],
         tag: Some([0x00; ATCA_AES_KEY_SIZE]),
-        counter_size: 5,
         ..Default::default()
     };
     let param_bad_4 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
-        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        nonce: vec![0x00; ATCA_AES_KEY_SIZE],
         tag: Some([0x00; ATCA_AES_KEY_SIZE]),
         ..Default::default()
     };
     let param_bad_5 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
-        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH + 1],
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
         tag: Some([0x00; ATCA_AES_KEY_SIZE]),
         ..Default::default()
     };
@@ -1178,7 +1173,7 @@ fn aead_gcm_decrypt_bad_data() {
         expected_bad_2 = AtcaStatus::AtcaInvalidId;
         expected_bad_3 = AtcaStatus::AtcaBadParam;
         expected_bad_4 = AtcaStatus::AtcaBadParam;
-        expected_bad_5 = AtcaStatus::AtcaBadParam;
+        expected_bad_5 = AtcaStatus::AtcaInvalidSize;
         expected_bad_6 = AtcaStatus::AtcaInvalidSize;
         expected_bad_7 = AtcaStatus::AtcaInvalidSize;
     }
@@ -1219,7 +1214,7 @@ fn aead_gcm_decrypt_bad_data() {
         Err(err) => result_bad_4 = err,
     }
 
-    // counter size is too big
+    // nonce length is too short
     match device.aead_decrypt(
         AeadAlgorithm::Gcm(param_bad_3),
         ATCA_ATECC_SLOTS_COUNT,
@@ -1229,25 +1224,25 @@ fn aead_gcm_decrypt_bad_data() {
         Err(err) => result_bad_5 = err,
     }
 
-    // no data to verify sign and decrypt
-    let mut empty_data: [u8; 0] = [];
+    // nonce length is too long
     match device.aead_decrypt(
         AeadAlgorithm::Gcm(param_bad_4),
-        ATCA_ATECC_SLOTS_COUNT,
-        &mut empty_data,
-    ) {
-        Ok(_) => (),
-        Err(err) => result_bad_6 = err,
-    }
-
-    // bad nonce length
-    match device.aead_decrypt(
-        AeadAlgorithm::Gcm(param_bad_5),
         ATCA_ATECC_SLOTS_COUNT,
         &mut data,
     ) {
         Ok(_) => (),
         Err(err) => result_bad_7 = err,
+    }
+
+    // no data to verify sign and decrypt
+    let mut empty_data: [u8; 0] = [];
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_bad_5),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut empty_data,
+    ) {
+        Ok(_) => (),
+        Err(err) => result_bad_6 = err,
     }
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
