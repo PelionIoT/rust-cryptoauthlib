@@ -1,3 +1,8 @@
+use std::mem::MaybeUninit;
+
+use cryptoauthlib_sys::atca_aes_ctr_ctx_t;
+use cryptoauthlib_sys::atca_aes_cmac_ctx_t;
+
 /// An ATECC/ATSHA device buffer to load
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -91,7 +96,9 @@ pub struct AeadParam {
     /// external encryption/decryption key needed when an AES key stored in the cryptochip is not used
     pub key: Option<[u8; ATCA_AES_KEY_SIZE]>,
     /// tag to verify authenticity of decrypted data (16 bytes)
-    pub tag: Option<[u8; ATCA_AES_KEY_SIZE]>,
+    pub tag: Option<Vec<u8>>,
+    /// tag length generated during encryption
+    pub tag_length: Option<u8>,
     /// Additional data that will be authenticated but not encrypted
     pub additional_data: Option<Vec<u8>>,
 }
@@ -100,19 +107,19 @@ impl Default for AeadParam {
     fn default() -> AeadParam {
         AeadParam {
             nonce: Vec::new(),
-            // counter_size: (ATCA_AES_DATA_SIZE - ATCA_AES_GCM_IV_STD_LENGTH) as u8,
             key: None,
             tag: None,
+            tag_length: None,
             additional_data: None,
         }
     }
 }
 
 ///
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug)]//, PartialEq)]
 pub struct AtcaAesCcmCtx {
-    // pub cbc_mac_ctx: atca_aes_cbcmac_ctx_t          // CBC_MAC context
-    // pub ctr_ctx: atca_aes_ctr_ctx_t                 // CTR context
+    pub cbc_mac_ctx: atca_aes_cmac_ctx_t,           // CBC_MAC context
+    pub ctr_ctx: atca_aes_ctr_ctx_t,                // CTR context
     pub iv_size: u8,                                // iv size
     pub m: u8,                                      // Tag size
     pub counter: [u8; ATCA_AES_DATA_SIZE],          // Initial counter value
@@ -127,6 +134,14 @@ pub struct AtcaAesCcmCtx {
 impl Default for AtcaAesCcmCtx {
     fn default() -> AtcaAesCcmCtx {
         AtcaAesCcmCtx {
+            cbc_mac_ctx: {
+                let ctx = MaybeUninit::<atca_aes_cmac_ctx_t>::zeroed();
+                unsafe { ctx.assume_init() }
+            },
+            ctr_ctx: {
+                let ctx = MaybeUninit::<atca_aes_ctr_ctx_t>::zeroed();
+                unsafe { ctx.assume_init() }
+            },
             iv_size: ATCA_AES_DATA_SIZE as u8,
             m: ATCA_AES_DATA_SIZE as u8,
             counter: [0x00; ATCA_AES_DATA_SIZE],

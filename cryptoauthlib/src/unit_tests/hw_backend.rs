@@ -610,10 +610,52 @@ fn gen_key_sign_hash() {
 
 #[test]
 #[serial]
-fn aead_ccm() {
+fn aead_ccm_encrypt_proper_data() {
     let device = test_setup();
 
+    // let mut chip_is_locked: bool = true;
+
+    let aes_key = [
+        0xB7, 0xCF, 0x6C, 0xF5, 0xE7, 0xF3, 0xCA, 0x22, 0x3C, 0xA7, 0x3C, 0x81, 0x9D, 0xCD, 0x62,
+        0xFE,
+    ];
+    let iv = [
+        0xA4, 0x13, 0x60, 0x09, 0xC0, 0xA7, 0xFD, 0xAC, 0xFE, 0x53, 0xF5, 0x07,
+    ];
+    //let mut plain_text = [
+    let mut data_32 = [
+        0x9F, 0xEE, 0xBB, 0xDF, 0x16, 0x0F, 0x96, 0x52, 0x53, 0xD9, 0x99, 0x58, 0xCC, 0xB1, 0x76,
+        0xDF, 0x9F, 0xEE, 0xBB, 0xDF, 0x16, 0x0F, 0x96, 0x52, 0x53, 0xD9, 0x99, 0x58, 0xCC, 0xB1,
+        0x76, 0xDF,
+    ];
+    let aad = [
+        0x47, 0x6B, 0x48, 0x80, 0xF5, 0x93, 0x33, 0x14, 0xDC, 0xC2, 0x3D, 0xF5, 0xDC, 0xB0, 0x09,
+        0x66, 0x47, 0x6B, 0x48, 0x80, 0xF5, 0x93, 0x33, 0x14, 0xDC, 0xC2, 0x3D, 0xF5, 0xDC, 0xB0,
+        0x09, 0x66,
+    ];
+
+    let param_32 = AeadParam {
+        key: Some(aes_key),
+        nonce: iv.to_vec(),
+        additional_data: Some(aad.to_vec()),
+        ..Default::default()
+    };
+
+    let mut result_32: AtcaStatus = AtcaStatus::AtcaUnknown;
+    // let result_tag_32: Vec<u8> = Vec::new();
+
+    match device.aead_encrypt(
+        AeadAlgorithm::Ccm(param_32),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_32,
+    ) {
+        Ok(_) => (), // Ok(tag) => result_tag_32 = tag,
+        Err(err) => result_32 = err,
+    }
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    if AtcaStatus::AtcaUnimplemented != result_32 {}
 }
 
 #[test]
@@ -621,6 +663,7 @@ fn aead_ccm() {
 fn aead_gcm_encrypt_proper_data() {
     const DATA_32_SIZE: usize = 32;
     const DATA_24_SIZE: usize = 24;
+    const SHORT_TAG_SIZE: usize = 12;
     const AES_KEY_SLOT_IDX: u8 = 0x09;
 
     let device = test_setup();
@@ -664,6 +707,13 @@ fn aead_gcm_encrypt_proper_data() {
         additional_data: Some(aad.to_vec()),
         ..Default::default()
     };
+    let param_32_short_tag = AeadParam {
+        key: Some(aes_key),
+        nonce: iv.to_vec(),
+        additional_data: Some(aad.to_vec()),
+        tag_length: Some(SHORT_TAG_SIZE as u8),
+        ..Default::default()
+    };
     let param_24 = AeadParam {
         key: Some(aes_key),
         nonce: iv.to_vec(),
@@ -685,22 +735,27 @@ fn aead_gcm_encrypt_proper_data() {
     data_24.clone_from_slice(&plain_text[..DATA_24_SIZE]);
     let mut data_32: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
     data_32.clone_from_slice(&plain_text);
+    let mut data_32_short_tag: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
+    data_32_short_tag.clone_from_slice(&plain_text);
     let mut data_24_internal: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
     data_24_internal.clone_from_slice(&plain_text[..DATA_24_SIZE]);
     let mut data_32_internal: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
     data_32_internal.clone_from_slice(&plain_text);
 
     let mut result_tag_32 = vec![0x00; ATCA_AES_KEY_SIZE];
+    let mut result_tag_32_short = vec![0x00; SHORT_TAG_SIZE];
     let mut result_tag_24 = vec![0x00; ATCA_AES_KEY_SIZE];
     let mut result_tag_32_internal = vec![0x00; ATCA_AES_KEY_SIZE];
     let mut result_tag_24_internal = vec![0x00; ATCA_AES_KEY_SIZE];
 
     let mut expected_32 = AtcaStatus::AtcaBadParam;
+    let mut expected_32_short_tag = AtcaStatus::AtcaBadParam;
     let mut expected_24 = AtcaStatus::AtcaBadParam;
     let mut expected_32_internal_key = AtcaStatus::AtcaBadParam;
     let mut expected_24_internal_key = AtcaStatus::AtcaBadParam;
     let mut expected_result_import_key = AtcaStatus::AtcaBadParam;
     let mut result_32 = AtcaStatus::AtcaUnknown;
+    let mut result_32_short_tag = AtcaStatus::AtcaUnknown;
     let mut result_24 = AtcaStatus::AtcaUnknown;
     let mut result_32_internal_key = AtcaStatus::AtcaUnknown;
     let mut result_24_internal_key = AtcaStatus::AtcaUnknown;
@@ -710,6 +765,7 @@ fn aead_gcm_encrypt_proper_data() {
         chip_is_locked = false;
 
         expected_32 = AtcaStatus::AtcaNotLocked;
+        expected_32_short_tag = AtcaStatus::AtcaNotLocked;
         expected_24 = AtcaStatus::AtcaNotLocked;
         expected_32_internal_key = AtcaStatus::AtcaNotLocked;
         expected_24_internal_key = AtcaStatus::AtcaNotLocked;
@@ -720,11 +776,13 @@ fn aead_gcm_encrypt_proper_data() {
 
     if chip_is_locked && device.is_aes_enabled() {
         expected_32 = AtcaStatus::AtcaSuccess;
+        expected_32_short_tag = AtcaStatus::AtcaSuccess;
         expected_24 = AtcaStatus::AtcaSuccess;
         expected_32_internal_key = AtcaStatus::AtcaSuccess;
         expected_24_internal_key = AtcaStatus::AtcaSuccess;
         expected_result_import_key = AtcaStatus::AtcaSuccess;
         result_32 = AtcaStatus::AtcaSuccess;
+        result_32_short_tag = AtcaStatus::AtcaSuccess;
         result_24 = AtcaStatus::AtcaSuccess;
         result_32_internal_key = AtcaStatus::AtcaSuccess;
         result_24_internal_key = AtcaStatus::AtcaSuccess;
@@ -737,6 +795,15 @@ fn aead_gcm_encrypt_proper_data() {
     ) {
         Ok(tag) => result_tag_32 = tag,
         Err(err) => result_32 = err,
+    }
+
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_32_short_tag),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_32_short_tag,
+    ) {
+        Ok(tag) => result_tag_32_short = tag,
+        Err(err) => result_32_short_tag = err,
     }
 
     match device.aead_encrypt(
@@ -771,6 +838,9 @@ fn aead_gcm_encrypt_proper_data() {
     assert_eq!(result_import_key, expected_result_import_key);
     if chip_is_locked && device.is_aes_enabled() {
         assert_eq!(result_tag_32, tag_32);
+        let mut tag_32_short: Vec<u8> = vec![0x00; SHORT_TAG_SIZE];
+        tag_32_short.copy_from_slice(&tag_32[..SHORT_TAG_SIZE]);
+        assert_eq!(result_tag_32_short, tag_32_short);
         assert_eq!(data_32, cipher_text);
         assert_eq!(result_tag_24, tag_24);
         assert_eq!(data_24.to_vec(), cipher_text[..DATA_24_SIZE].to_vec());
@@ -783,6 +853,7 @@ fn aead_gcm_encrypt_proper_data() {
         );
     }
     assert_eq!(result_32, expected_32);
+    assert_eq!(result_32_short_tag, expected_32_short_tag);
     assert_eq!(result_24, expected_24);
     assert_eq!(result_32_internal_key, expected_32_internal_key);
     assert_eq!(result_24_internal_key, expected_24_internal_key);
@@ -821,6 +892,20 @@ fn aead_gcm_encrypt_bad_data() {
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
         ..Default::default()
     };
+    let param_bad_5 = AeadParam {
+        key: Some([0x00; ATCA_AES_KEY_SIZE]),
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        additional_data: Some(vec![0x00; ATCA_AES_DATA_SIZE]),
+        tag_length: Some((ATCA_AES_DATA_SIZE + 1) as u8),
+        ..Default::default()
+    };
+    let param_bad_6 = AeadParam {
+        key: Some([0x00; ATCA_AES_KEY_SIZE]),
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        additional_data: Some(vec![0x00; ATCA_AES_DATA_SIZE]),
+        tag_length: Some(11),
+        ..Default::default()
+    };
 
     let mut expected_bad_1 = AtcaStatus::AtcaBadParam;
     let mut expected_bad_2 = AtcaStatus::AtcaBadParam;
@@ -828,12 +913,16 @@ fn aead_gcm_encrypt_bad_data() {
     let mut expected_bad_4 = AtcaStatus::AtcaBadParam;
     let mut expected_bad_5 = AtcaStatus::AtcaBadParam;
     let mut expected_bad_6 = AtcaStatus::AtcaBadParam;
+    let mut expected_bad_7 = AtcaStatus::AtcaBadParam;
+    let mut expected_bad_8 = AtcaStatus::AtcaBadParam;
     let mut result_bad_1 = AtcaStatus::AtcaUnknown;
     let mut result_bad_2 = AtcaStatus::AtcaUnknown;
     let mut result_bad_3 = AtcaStatus::AtcaUnknown;
     let mut result_bad_4 = AtcaStatus::AtcaUnknown;
     let mut result_bad_5 = AtcaStatus::AtcaUnknown;
     let mut result_bad_6 = AtcaStatus::AtcaUnknown;
+    let mut result_bad_7 = AtcaStatus::AtcaUnknown;
+    let mut result_bad_8 = AtcaStatus::AtcaUnknown;
 
     if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
         println!("\u{001b}[1m\u{001b}[33mConfiguration and/or Data zone not Locked!\u{001b}[0m ");
@@ -845,6 +934,8 @@ fn aead_gcm_encrypt_bad_data() {
         expected_bad_4 = AtcaStatus::AtcaNotLocked;
         expected_bad_5 = AtcaStatus::AtcaNotLocked;
         expected_bad_6 = AtcaStatus::AtcaNotLocked;
+        expected_bad_7 = AtcaStatus::AtcaNotLocked;
+        expected_bad_8 = AtcaStatus::AtcaNotLocked;
     }
 
     if chip_is_locked && device.is_aes_enabled() {
@@ -854,6 +945,8 @@ fn aead_gcm_encrypt_bad_data() {
         expected_bad_4 = AtcaStatus::AtcaInvalidSize;
         expected_bad_5 = AtcaStatus::AtcaInvalidSize;
         expected_bad_6 = AtcaStatus::AtcaInvalidSize;
+        expected_bad_7 = AtcaStatus::AtcaInvalidSize;
+        expected_bad_8 = AtcaStatus::AtcaInvalidSize;
     }
 
     // slot_id is too big
@@ -913,6 +1006,26 @@ fn aead_gcm_encrypt_bad_data() {
         Err(err) => result_bad_6 = err,
     }
 
+    // expected tag length is too long
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_bad_5),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data,
+    ) {
+        Ok(_) => (),
+        Err(err) => result_bad_7 = err,
+    }
+
+    // expected tag length is too short
+    match device.aead_encrypt(
+        AeadAlgorithm::Gcm(param_bad_6),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data,
+    ) {
+        Ok(_) => (),
+        Err(err) => result_bad_8 = err,
+    }
+
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
     assert_eq!(result_bad_1, expected_bad_1);
@@ -921,6 +1034,8 @@ fn aead_gcm_encrypt_bad_data() {
     assert_eq!(result_bad_4, expected_bad_4);
     assert_eq!(result_bad_5, expected_bad_5);
     assert_eq!(result_bad_6, expected_bad_6);
+    assert_eq!(result_bad_7, expected_bad_7);
+    assert_eq!(result_bad_8, expected_bad_8);
 }
 
 #[test]
@@ -928,6 +1043,7 @@ fn aead_gcm_encrypt_bad_data() {
 fn aead_gcm_decrypt_proper_data() {
     const DATA_32_SIZE: usize = 32;
     const DATA_24_SIZE: usize = 24;
+    const SHORT_TAG_SIZE: usize = 12;
     const AES_KEY_SLOT_IDX: u8 = 0x09;
 
     let device = test_setup();
@@ -968,24 +1084,35 @@ fn aead_gcm_decrypt_proper_data() {
     let param_32 = AeadParam {
         nonce: iv.to_vec(),
         key: Some(aes_key),
-        tag: Some(tag_32),
+        tag: Some(tag_32.to_vec()),
         additional_data: Some(aad.to_vec()),
+        ..Default::default()
+    };
+    let mut tag_32_short: Vec<u8> = vec![0x00; SHORT_TAG_SIZE];
+    tag_32_short.copy_from_slice(&tag_32[..SHORT_TAG_SIZE]);
+    let param_32_short_tag = AeadParam {
+        nonce: iv.to_vec(),
+        key: Some(aes_key),
+        tag: Some(tag_32_short),
+        additional_data: Some(aad.to_vec()),
+        ..Default::default()
     };
     let param_24 = AeadParam {
         nonce: iv.to_vec(),
         key: Some(aes_key),
-        tag: Some(tag_24),
+        tag: Some(tag_24.to_vec()),
         additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
+        ..Default::default()
     };
     let param_32_internal_key = AeadParam {
         nonce: iv.to_vec(),
-        tag: Some(tag_32),
+        tag: Some(tag_32.to_vec()),
         additional_data: Some(aad.to_vec()),
         ..Default::default()
     };
     let param_24_internal_key = AeadParam {
         nonce: iv.to_vec(),
-        tag: Some(tag_24),
+        tag: Some(tag_24.to_vec()),
         additional_data: Some(aad[..DATA_24_SIZE].to_vec()),
         ..Default::default()
     };
@@ -994,22 +1121,27 @@ fn aead_gcm_decrypt_proper_data() {
     data_24.clone_from_slice(&cipher_text[..DATA_24_SIZE]);
     let mut data_32: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
     data_32.clone_from_slice(&cipher_text);
+    let mut data_32_short_tag: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
+    data_32_short_tag.clone_from_slice(&cipher_text);
     let mut data_24_internal: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
     data_24_internal.clone_from_slice(&cipher_text[..DATA_24_SIZE]);
     let mut data_32_internal: [u8; DATA_32_SIZE] = [0x00; DATA_32_SIZE];
     data_32_internal.clone_from_slice(&cipher_text);
 
     let mut result_tag_32: bool = false;
+    let mut result_tag_32_short: bool = false;
     let mut result_tag_24: bool = false;
     let mut result_tag_32_internal: bool = false;
     let mut result_tag_24_internal: bool = false;
 
     let mut expected_32 = AtcaStatus::AtcaBadParam;
+    let mut expected_32_short_tag = AtcaStatus::AtcaBadParam;
     let mut expected_24 = AtcaStatus::AtcaBadParam;
     let mut expected_32_internal_key = AtcaStatus::AtcaBadParam;
     let mut expected_24_internal_key = AtcaStatus::AtcaBadParam;
     let mut expected_result_import_key = AtcaStatus::AtcaBadParam;
     let mut result_32 = AtcaStatus::AtcaUnknown;
+    let mut result_32_short_tag = AtcaStatus::AtcaUnknown;
     let mut result_24 = AtcaStatus::AtcaUnknown;
     let mut result_32_internal_key = AtcaStatus::AtcaUnknown;
     let mut result_24_internal_key = AtcaStatus::AtcaUnknown;
@@ -1019,6 +1151,7 @@ fn aead_gcm_decrypt_proper_data() {
         chip_is_locked = false;
 
         expected_32 = AtcaStatus::AtcaNotLocked;
+        expected_32_short_tag = AtcaStatus::AtcaNotLocked;
         expected_24 = AtcaStatus::AtcaNotLocked;
         expected_32_internal_key = AtcaStatus::AtcaNotLocked;
         expected_24_internal_key = AtcaStatus::AtcaNotLocked;
@@ -1029,11 +1162,13 @@ fn aead_gcm_decrypt_proper_data() {
 
     if chip_is_locked && device.is_aes_enabled() {
         expected_32 = AtcaStatus::AtcaSuccess;
+        expected_32_short_tag = AtcaStatus::AtcaSuccess;
         expected_24 = AtcaStatus::AtcaSuccess;
         expected_32_internal_key = AtcaStatus::AtcaSuccess;
         expected_24_internal_key = AtcaStatus::AtcaSuccess;
         expected_result_import_key = AtcaStatus::AtcaSuccess;
         result_32 = AtcaStatus::AtcaSuccess;
+        result_32_short_tag = AtcaStatus::AtcaSuccess;
         result_24 = AtcaStatus::AtcaSuccess;
         result_32_internal_key = AtcaStatus::AtcaSuccess;
         result_24_internal_key = AtcaStatus::AtcaSuccess;
@@ -1046,6 +1181,15 @@ fn aead_gcm_decrypt_proper_data() {
     ) {
         Ok(is_tag_ok) => result_tag_32 = is_tag_ok,
         Err(err) => result_32 = err,
+    }
+
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_32_short_tag),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data_32_short_tag,
+    ) {
+        Ok(is_tag_ok) => result_tag_32_short = is_tag_ok,
+        Err(err) => result_32_short_tag = err,
     }
 
     match device.aead_decrypt(
@@ -1081,6 +1225,8 @@ fn aead_gcm_decrypt_proper_data() {
     if chip_is_locked && device.is_aes_enabled() {
         assert_eq!(result_tag_32, true);
         assert_eq!(data_32, plain_text);
+        assert_eq!(result_tag_32_short, true);
+        assert_eq!(data_32_short_tag, plain_text);
         assert_eq!(result_tag_24, true);
         assert_eq!(data_24.to_vec(), plain_text[..DATA_24_SIZE].to_vec());
         assert_eq!(result_tag_32_internal, true);
@@ -1092,6 +1238,7 @@ fn aead_gcm_decrypt_proper_data() {
         );
     }
     assert_eq!(result_32, expected_32);
+    assert_eq!(result_32_short_tag, expected_32_short_tag);
     assert_eq!(result_24, expected_24);
     assert_eq!(result_32_internal_key, expected_32_internal_key);
     assert_eq!(result_24_internal_key, expected_24_internal_key);
@@ -1100,6 +1247,7 @@ fn aead_gcm_decrypt_proper_data() {
 #[test]
 #[serial]
 fn aead_gcm_decrypt_bad_data() {
+    const TAG_TOO_SHORT: usize = 11;
     let device = test_setup();
 
     let mut chip_is_locked: bool = true;
@@ -1108,8 +1256,9 @@ fn aead_gcm_decrypt_bad_data() {
     let param_ok = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
-        tag: Some([0x00; ATCA_AES_KEY_SIZE]),
+        tag: Some([0x00; ATCA_AES_KEY_SIZE].to_vec()),
         additional_data: Some(vec![0x00; ATCA_AES_DATA_SIZE]),
+        ..Default::default()
     };
     let param_bad_1 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
@@ -1118,25 +1267,39 @@ fn aead_gcm_decrypt_bad_data() {
     };
     let param_bad_2 = AeadParam {
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
-        tag: Some([0x00; ATCA_AES_KEY_SIZE]),
+        tag: Some(vec![0x00; ATCA_AES_KEY_SIZE]),
         ..Default::default()
     };
     let param_bad_3 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH - 1],
-        tag: Some([0x00; ATCA_AES_KEY_SIZE]),
+        tag: Some(vec![0x00; ATCA_AES_KEY_SIZE]),
         ..Default::default()
     };
     let param_bad_4 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; ATCA_AES_KEY_SIZE],
-        tag: Some([0x00; ATCA_AES_KEY_SIZE]),
+        tag: Some(vec![0x00; ATCA_AES_KEY_SIZE]),
         ..Default::default()
     };
     let param_bad_5 = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
-        tag: Some([0x00; ATCA_AES_KEY_SIZE]),
+        tag: Some(vec![0x00; ATCA_AES_KEY_SIZE]),
+        ..Default::default()
+    };
+    let param_bad_6 = AeadParam {
+        key: Some([0x00; ATCA_AES_KEY_SIZE]),
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        tag: Some([0x00; ATCA_AES_KEY_SIZE + 1].to_vec()),
+        additional_data: Some(vec![0x00; ATCA_AES_DATA_SIZE]),
+        ..Default::default()
+    };
+    let param_bad_7 = AeadParam {
+        key: Some([0x00; ATCA_AES_KEY_SIZE]),
+        nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
+        tag: Some([0x00; TAG_TOO_SHORT].to_vec()),
+        additional_data: Some(vec![0x00; ATCA_AES_DATA_SIZE]),
         ..Default::default()
     };
 
@@ -1147,6 +1310,8 @@ fn aead_gcm_decrypt_bad_data() {
     let mut expected_bad_5 = AtcaStatus::AtcaBadParam;
     let mut expected_bad_6 = AtcaStatus::AtcaBadParam;
     let mut expected_bad_7 = AtcaStatus::AtcaBadParam;
+    let mut expected_bad_8 = AtcaStatus::AtcaBadParam;
+    let mut expected_bad_9 = AtcaStatus::AtcaBadParam;
     let mut result_bad_1 = AtcaStatus::AtcaUnknown;
     let mut result_bad_2 = AtcaStatus::AtcaUnknown;
     let mut result_bad_3 = AtcaStatus::AtcaUnknown;
@@ -1154,6 +1319,8 @@ fn aead_gcm_decrypt_bad_data() {
     let mut result_bad_5 = AtcaStatus::AtcaUnknown;
     let mut result_bad_6 = AtcaStatus::AtcaUnknown;
     let mut result_bad_7 = AtcaStatus::AtcaUnknown;
+    let mut result_bad_8 = AtcaStatus::AtcaUnknown;
+    let mut result_bad_9 = AtcaStatus::AtcaUnknown;
 
     if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
         println!("\u{001b}[1m\u{001b}[33mConfiguration and/or Data zone not Locked!\u{001b}[0m ");
@@ -1166,6 +1333,8 @@ fn aead_gcm_decrypt_bad_data() {
         expected_bad_5 = AtcaStatus::AtcaNotLocked;
         expected_bad_6 = AtcaStatus::AtcaNotLocked;
         expected_bad_7 = AtcaStatus::AtcaNotLocked;
+        expected_bad_8 = AtcaStatus::AtcaNotLocked;
+        expected_bad_9 = AtcaStatus::AtcaNotLocked;
     }
 
     if chip_is_locked && device.is_aes_enabled() {
@@ -1176,6 +1345,8 @@ fn aead_gcm_decrypt_bad_data() {
         expected_bad_5 = AtcaStatus::AtcaInvalidSize;
         expected_bad_6 = AtcaStatus::AtcaInvalidSize;
         expected_bad_7 = AtcaStatus::AtcaInvalidSize;
+        expected_bad_8 = AtcaStatus::AtcaInvalidSize;
+        expected_bad_9 = AtcaStatus::AtcaInvalidSize;
     }
 
     // slot_id is too big
@@ -1231,7 +1402,7 @@ fn aead_gcm_decrypt_bad_data() {
         &mut data,
     ) {
         Ok(_) => (),
-        Err(err) => result_bad_7 = err,
+        Err(err) => result_bad_6 = err,
     }
 
     // no data to verify sign and decrypt
@@ -1242,7 +1413,27 @@ fn aead_gcm_decrypt_bad_data() {
         &mut empty_data,
     ) {
         Ok(_) => (),
-        Err(err) => result_bad_6 = err,
+        Err(err) => result_bad_7 = err,
+    }
+
+    // tag length is too long
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_bad_6),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data,
+    ) {
+        Ok(_) => (),
+        Err(err) => result_bad_8 = err,
+    }
+
+    // tag length is too short
+    match device.aead_decrypt(
+        AeadAlgorithm::Gcm(param_bad_7),
+        ATCA_ATECC_SLOTS_COUNT,
+        &mut data,
+    ) {
+        Ok(_) => (),
+        Err(err) => result_bad_9 = err,
     }
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
@@ -1254,6 +1445,8 @@ fn aead_gcm_decrypt_bad_data() {
     assert_eq!(result_bad_5, expected_bad_5);
     assert_eq!(result_bad_6, expected_bad_6);
     assert_eq!(result_bad_7, expected_bad_7);
+    assert_eq!(result_bad_8, expected_bad_8);
+    assert_eq!(result_bad_9, expected_bad_9);
 }
 
 #[test]
