@@ -20,6 +20,13 @@ use super::hw_impl;
 
 #[cfg(not(feature = "software-backend"))]
 mod hw_backend;
+#[cfg(not(feature = "software-backend"))]
+mod hw_backend_aes_ccm;
+#[cfg(not(feature = "software-backend"))]
+mod hw_backend_aes_gcm;
+#[cfg(not(feature = "software-backend"))]
+mod hw_backend_common;
+
 #[cfg(feature = "software-backend")]
 mod sw_backend;
 
@@ -60,7 +67,7 @@ fn random() {
     }
     #[cfg(not(feature = "software-backend"))]
     {
-        let device = hw_backend::test_setup();
+        let device = hw_backend_common::test_setup();
 
         let mut rand_out = Vec::new();
         let device_random = device.random(&mut rand_out);
@@ -83,7 +90,7 @@ fn read_config_zone() {
     #[cfg(feature = "software-backend")]
     let device = sw_backend::test_setup("always-success".to_owned());
     #[cfg(not(feature = "software-backend"))]
-    let device = hw_backend::test_setup();
+    let device = hw_backend_common::test_setup();
 
     let mut config_data = Vec::new();
     let device_read_config_zone = device.read_config_zone(&mut config_data);

@@ -81,14 +81,14 @@ impl Default for VerifyEcdsaParam {
     }
 }
 
-///
+/// Type of AEAD algorithm
 #[derive(Clone, Debug, PartialEq)]
 pub enum AeadAlgorithm {
     Ccm(AeadParam),
     Gcm(AeadParam),
 }
 
-///
+/// AEAD algorithm parameters for compute
 #[derive(Clone, Debug, PartialEq)]
 pub struct AeadParam {
     /// Nonce [number used once aka IV] (default length is 12 bytes)
@@ -115,7 +115,7 @@ impl Default for AeadParam {
     }
 }
 
-///
+/// Data context structure for AEAD encryption in CCM mode
 #[derive(Copy, Clone, Debug)]//, PartialEq)]
 pub struct AtcaAesCcmCtx {
     pub cbc_mac_ctx: atca_aes_cmac_ctx_t,           // CBC_MAC context
@@ -154,6 +154,7 @@ impl Default for AtcaAesCcmCtx {
         }
     }
 }
+
 /// structure that stores data for options supported by the chip
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ChipOptions {
@@ -188,7 +189,8 @@ impl Default for ChipOptions {
     }
 }
 
-/// 
+/// Allowed IO transmission states between chip and host MCU
+/// for ECDH, KDF, Verify and SecureBoot commands.
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OutputProtectionState {

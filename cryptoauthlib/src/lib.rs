@@ -49,14 +49,14 @@ pub trait AteccDeviceTrait {
         hash: &[u8],
         signature: &[u8],
     ) -> Result<bool, AtcaStatus>;
-    ///
+    /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_encrypt(
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<Vec<u8>, AtcaStatus>;
-    ///
+    /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_decrypt(
         &self,
         algorithm: AeadAlgorithm,

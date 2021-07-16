@@ -24,7 +24,7 @@ pub const ATCA_KEY_SIZE: usize = cryptoauthlib_sys::ATCA_KEY_SIZE as usize;
 pub const ATCA_AES_DATA_SIZE:usize = cryptoauthlib_sys::AES_DATA_SIZE as usize;
 /// Size (in bytes) of AES key
 pub const ATCA_AES_KEY_SIZE: usize = cryptoauthlib_sys::AES_DATA_SIZE as usize;
-///
+/// Standard NONCE (IV) length for AES GCM encryption (in bytes)
 pub const ATCA_AES_GCM_IV_STD_LENGTH: usize = cryptoauthlib_sys::ATCA_AES_GCM_IV_STD_LENGTH as usize;
 /// Size (in bytes) of SHA hash
 pub const ATCA_SHA2_256_DIGEST_SIZE: usize = cryptoauthlib_sys::ATCA_SHA2_256_DIGEST_SIZE as usize;

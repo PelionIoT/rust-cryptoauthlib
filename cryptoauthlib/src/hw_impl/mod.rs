@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-// use std::cmp::min;
 use std::collections::HashMap;
 use std::convert::{From, TryFrom};
 use std::ptr;
@@ -172,7 +171,7 @@ impl AteccDeviceTrait for AteccDevice {
         data: &mut [u8],
     ) -> Result<Vec<u8>, AtcaStatus> {
         self.aead_encrypt(algorithm, slot_id, data)
-    }
+    } // AteccDevice::aead_encrypt()
 
     /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     /// Trait implementation
@@ -183,7 +182,7 @@ impl AteccDeviceTrait for AteccDevice {
         data: &mut [u8],
     ) -> Result<bool, AtcaStatus> {
         self.aead_decrypt(algorithm, slot_id, data)
-    }
+    } // AteccDevice::aead_decrypt()
 
     /// Request ATECC to return own device type
     /// Trait implementation
@@ -224,7 +223,7 @@ impl AteccDeviceTrait for AteccDevice {
     /// Trait implementation
     fn add_access_key(&self, slot_id: u8, access_key: &[u8]) -> AtcaStatus {
         self.add_access_key(slot_id, access_key)
-    } // AteccDevice::add_access_key
+    } // AteccDevice::add_access_key()
 
     /// A function that deletes all access keys for secure read or write operations
     /// performed by the ATECCx08 chip
@@ -323,7 +322,7 @@ impl AteccDeviceTrait for AteccDevice {
     #[cfg(test)]
     fn get_access_key(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {
         self.get_access_key(slot_id, key)
-    }
+    } // AteccDevice::get_access_key()
 }
 
 /// Implementation of CryptoAuth Library API Rust wrapper calls
@@ -881,15 +880,12 @@ impl AteccDevice {
             // If chip does not support AES hardware encryption, the operation cannot be performed
             return Err(AtcaStatus::AtcaBadParam);
         }
-        if slot_id > ATCA_ATECC_SLOTS_COUNT {
-            return Err(AtcaStatus::AtcaInvalidId);
-        }
 
         match algorithm {
             AeadAlgorithm::Ccm(aead_param) => self.encrypt_aes_ccm(aead_param, slot_id, data),
             AeadAlgorithm::Gcm(aead_param) => self.encrypt_aes_gcm(aead_param, slot_id, data),
         }
-    }
+    } // AteccDevice::aead_encrypt()
 
     /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_decrypt(
@@ -905,15 +901,12 @@ impl AteccDevice {
             // If chip does not support AES hardware encryption, the operation cannot be performed
             return Err(AtcaStatus::AtcaBadParam);
         }
-        if slot_id > ATCA_ATECC_SLOTS_COUNT {
-            return Err(AtcaStatus::AtcaInvalidId);
-        }
 
         match algorithm {
             AeadAlgorithm::Ccm(aead_param) => self.decrypt_aes_ccm(aead_param, slot_id, data),
             AeadAlgorithm::Gcm(aead_param) => self.decrypt_aes_gcm(aead_param, slot_id, data),
         }
-    }
+    } // AteccDevice::aead_decrypt()
 
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType {

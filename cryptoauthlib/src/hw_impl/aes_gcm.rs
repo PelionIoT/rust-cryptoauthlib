@@ -46,10 +46,13 @@ impl AteccDevice {
 
                         start_pos += shift;
                         let remaining_bytes = data.len() - start_pos;
-                        if 0 == remaining_bytes {
-                            shift = 0
-                        } else if remaining_bytes < ATCA_AES_DATA_SIZE {
-                            shift = remaining_bytes
+                        match 0 == remaining_bytes {
+                            true => shift = 0,
+                            false => {
+                                if remaining_bytes < ATCA_AES_DATA_SIZE {
+                                    shift = remaining_bytes
+                                }
+                            }
                         }
                     }
                 }
@@ -69,13 +72,12 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<bool, AtcaStatus> {
-        let mut tag_to_check: Vec<u8> = Vec::new();
+        let tag_to_check: Vec<u8>;
 
-        if aead_param.tag.is_none() {
+        if let Some(val) = aead_param.tag.clone() {
+            tag_to_check = val;
+        } else {
             return Err(AtcaStatus::AtcaBadParam);
-        } else if let Some(tag) = &aead_param.tag {
-            tag_to_check.resize(tag.len(), 0x00);
-            tag_to_check.clone_from_slice(&tag[..tag.len()])
         }
 
         let mut ctx: atca_aes_gcm_ctx_t;
@@ -101,10 +103,13 @@ impl AteccDevice {
 
                         start_pos += shift;
                         let remaining_bytes = data.len() - start_pos;
-                        if 0 == remaining_bytes {
-                            shift = 0
-                        } else if remaining_bytes < ATCA_AES_DATA_SIZE {
-                            shift = remaining_bytes
+                        match 0 == remaining_bytes {
+                            true => shift = 0,
+                            false => {
+                                if remaining_bytes < ATCA_AES_DATA_SIZE {
+                                    shift = remaining_bytes
+                                }
+                            }
                         }
                     }
                 }
@@ -135,7 +140,9 @@ impl AteccDevice {
         {
             return Err(AtcaStatus::AtcaInvalidId);
         }
-        if (ATCA_ATECC_SLOTS_COUNT == slot_id) && aead_param.key.is_none() {
+        if (ATCA_ATECC_SLOTS_COUNT == slot_id) && aead_param.key.is_none()
+            || (aead_param.tag_length.is_some() && aead_param.tag.is_some())
+        {
             return Err(AtcaStatus::AtcaBadParam);
         }
         if (data.is_empty() && aead_param.additional_data.is_none())
@@ -159,14 +166,15 @@ impl AteccDevice {
             result = self.nonce(NonceTarget::TempKey, &key)
         }
 
-        if AtcaStatus::AtcaSuccess != result {
-            return Err(result);
-        } else {
-            let iv: Vec<u8> = aead_param.nonce;
-            match self.aes_gcm_init(slot_id, &iv) {
-                Err(err) => return Err(err),
-                Ok(val) => ctx = val,
-            };
+        match AtcaStatus::AtcaSuccess != result {
+            true => return Err(result),
+            false => {
+                let iv: Vec<u8> = aead_param.nonce;
+                match self.aes_gcm_init(slot_id, &iv) {
+                    Err(err) => return Err(err),
+                    Ok(val) => ctx = val,
+                }
+            }
         }
 
         if let Some(data_to_sign) = &aead_param.additional_data {
@@ -180,10 +188,13 @@ impl AteccDevice {
                         ctx = val;
                         start_pos += shift;
                         let remaining_bytes = data_to_sign.len() - start_pos;
-                        if 0 == remaining_bytes {
-                            shift = 0
-                        } else if remaining_bytes < ATCA_AES_DATA_SIZE {
-                            shift = remaining_bytes
+                        match 0 == remaining_bytes {
+                            true => shift = 0,
+                            false => {
+                                if remaining_bytes < ATCA_AES_DATA_SIZE {
+                                    shift = remaining_bytes
+                                }
+                            }
                         }
                     }
                 }
@@ -193,7 +204,8 @@ impl AteccDevice {
         Ok(ctx)
     }
 
-    /// a helper function that initiates the AES GCM mode
+    /// Initialize context for AES GCM operation with an existing IV, which
+    /// is common when starting a decrypt operation
     fn aes_gcm_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
         const BLOCK_IDX: u8 = 0;
 
@@ -231,7 +243,8 @@ impl AteccDevice {
         }
     }
 
-    /// a helper function processing data block for authentication in AES GCM mode.
+    /// Process Additional Authenticated Data (AAD) using GCM mode and a
+    /// key within the ATECC608 device
     fn aes_gcm_aad_update(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -260,7 +273,8 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_aad_update()
 
-    /// auxiliary function encrypting data block in AES GCM mode.
+    /// Encrypt data using GCM mode and a key within the ATECC608 device.
+    /// aes_gcm_init() should be called before the first use of this function.
     fn aes_gcm_encrypt_update(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -296,7 +310,8 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_encrypt_update()
 
-    /// auxiliary function that decrypts data block in AES GCM mode
+    /// Decrypt data using GCM mode and a key within the ATECC608 device.
+    /// aes_gcm_init() should be called before the first use of this function
     fn aes_gcm_decrypt_update(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -332,7 +347,7 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_decrypt_update()
 
-    /// auxiliary function that ends encryption in AES GCM mode
+    /// Complete a GCM encrypt operation returning the authentication tag
     fn aes_gcm_encrypt_finish(
         &self,
         ctx: atca_aes_gcm_ctx_t,
@@ -365,7 +380,7 @@ impl AteccDevice {
         }
     } // AteccDevice::aes_gcm_encrypt_finish()
 
-    /// auxiliary function completing AES GCM decryption
+    /// Complete a GCM decrypt operation verifying the authentication tag
     fn aes_gcm_decrypt_finish(
         &self,
         ctx: atca_aes_gcm_ctx_t,

@@ -92,7 +92,7 @@ impl AteccDeviceTrait for AteccDevice {
             _ => Err(self.default_dev_status()),
         }
     }
-    ///
+    /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_encrypt(
         &self,
         _algorithm: AeadAlgorithm,
@@ -104,7 +104,7 @@ impl AteccDeviceTrait for AteccDevice {
             _ => Err(self.default_dev_status()),
         }
     }
-    ///
+    /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_decrypt(
         &self,
         _algorithm: AeadAlgorithm,
