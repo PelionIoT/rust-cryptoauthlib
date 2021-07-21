@@ -98,7 +98,7 @@ impl AteccDevice {
             key.resize_with(ATCA_NONCE_SIZE, || 0x00);
             let result = self.nonce(NonceTarget::TempKey, &key);
             if AtcaStatus::AtcaSuccess != result {
-                return Err(result)
+                return Err(result);
             }
         }
 
@@ -111,7 +111,8 @@ impl AteccDevice {
             }
         };
         let data_size = data.len();
-        let mut ctx: AtcaAesCcmCtx = self.aes_ccm_init(slot_id, &iv, additional_data_size, data_size, tag_length)?;
+        let mut ctx: AtcaAesCcmCtx =
+            self.aes_ccm_init(slot_id, &iv, additional_data_size, data_size, tag_length)?;
 
         if let Some(data_to_sign) = &aead_param.additional_data {
             ctx = self.aes_ccm_aad_update(ctx, &data_to_sign)?;
@@ -597,7 +598,7 @@ impl AteccDevice {
 
         // Check for incomplete data block
         if ctx.block_size != 0 {
-            return Err(AtcaStatus::AtcaInvalidSize) // Returns INVALID_SIZE if incomplete blocks are present
+            return Err(AtcaStatus::AtcaInvalidSize); // Returns INVALID_SIZE if incomplete blocks are present
         }
 
         // All processing is already done, copying the mac to result buffer
