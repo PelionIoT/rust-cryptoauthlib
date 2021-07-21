@@ -19,22 +19,11 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<Vec<u8>, AtcaStatus> {
-        let mut ctx: AtcaAesCcmCtx;
+        let mut ctx: AtcaAesCcmCtx = self.common_aes_ccm(aead_param, slot_id, data)?;
+        ctx = self.aes_ccm_update(ctx, data, true)?;
 
-        match self.common_aes_ccm(aead_param, slot_id, data) {
-            Ok(val) => ctx = val,
-            Err(err) => return Err(err),
-        }
-
-        match self.aes_ccm_update(ctx, data, true) {
-            Ok(val) => ctx = val,
-            Err(err) => return Err(err),
-        }
-
-        match self.aes_ccm_finish(ctx) {
-            Ok(val) => Ok(val),
-            Err(err) => Err(err),
-        }
+        let result = self.aes_ccm_finish(ctx)?;
+        Ok(result)
     }
 
     /// function that performs decryption in AES CCM mode
@@ -44,7 +33,6 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<bool, AtcaStatus> {
-        let mut ctx: AtcaAesCcmCtx;
         let tag_to_check: Vec<u8>;
 
         if let Some(val) = aead_param.tag.clone() {
@@ -53,20 +41,11 @@ impl AteccDevice {
             return Err(AtcaStatus::AtcaBadParam);
         }
 
-        match self.common_aes_ccm(aead_param, slot_id, data) {
-            Ok(val) => ctx = val,
-            Err(err) => return Err(err),
-        }
+        let mut ctx: AtcaAesCcmCtx = self.common_aes_ccm(aead_param, slot_id, data)?;
+        ctx = self.aes_ccm_update(ctx, data, false)?;
 
-        match self.aes_ccm_update(ctx, data, false) {
-            Ok(val) => ctx = val,
-            Err(err) => return Err(err),
-        }
-
-        match self.aes_ccm_decrypt_finish(ctx, &tag_to_check) {
-            Ok(val) => Ok(val),
-            Err(err) => Err(err),
-        }
+        let result = self.aes_ccm_decrypt_finish(ctx, &tag_to_check)?;
+        Ok(result)
     }
 
     /// a helper function implementing common functionality for AES CCM encryption and decryption
@@ -107,8 +86,6 @@ impl AteccDevice {
             return Err(AtcaStatus::AtcaInvalidSize);
         }
 
-        let mut ctx: AtcaAesCcmCtx;
-
         let mut tag_length: usize = ATCA_AES_DATA_SIZE;
         if let Some(val) = &aead_param.tag_length {
             tag_length = *val as usize
@@ -116,38 +93,28 @@ impl AteccDevice {
             tag_length = val.len();
         }
 
-        let mut result = AtcaStatus::AtcaSuccess;
         if let Some(val) = &aead_param.key {
             let mut key: Vec<u8> = val.to_vec();
             key.resize_with(ATCA_NONCE_SIZE, || 0x00);
-            result = self.nonce(NonceTarget::TempKey, &key)
-        }
-
-        match AtcaStatus::AtcaSuccess != result {
-            true => return Err(result),
-            false => {
-                let iv: Vec<u8> = aead_param.nonce;
-                let mut additional_data_size: usize = 0;
-                if let Some(val) = &aead_param.additional_data {
-                    additional_data_size = val.len();
-                    if additional_data_size > MAX_AAD_SIZE {
-                        return Err(AtcaStatus::AtcaInvalidSize);
-                    }
-                };
-                let data_size = data.len();
-
-                match self.aes_ccm_init(slot_id, &iv, additional_data_size, data_size, tag_length) {
-                    Ok(val) => ctx = val,
-                    Err(err) => return Err(err),
-                };
+            let result = self.nonce(NonceTarget::TempKey, &key);
+            if AtcaStatus::AtcaSuccess != result {
+                return Err(result)
             }
         }
+
+        let iv: Vec<u8> = aead_param.nonce;
+        let mut additional_data_size: usize = 0;
+        if let Some(val) = &aead_param.additional_data {
+            additional_data_size = val.len();
+            if additional_data_size > MAX_AAD_SIZE {
+                return Err(AtcaStatus::AtcaInvalidSize);
+            }
+        };
+        let data_size = data.len();
+        let mut ctx: AtcaAesCcmCtx = self.aes_ccm_init(slot_id, &iv, additional_data_size, data_size, tag_length)?;
 
         if let Some(data_to_sign) = &aead_param.additional_data {
-            match self.aes_ccm_aad_update(ctx, &data_to_sign) {
-                Ok(val) => ctx = val,
-                Err(err) => return Err(err),
-            }
+            ctx = self.aes_ccm_aad_update(ctx, &data_to_sign)?;
         }
 
         Ok(ctx)
@@ -224,10 +191,7 @@ impl AteccDevice {
         ctx.cbc_mac_ctx = self.aes_cbcmac_init(slot_id);
 
         // Processing initial block B0 through CBC-MAC.
-        match self.aes_cbcmac_update(ctx.cbc_mac_ctx, &b) {
-            Ok(val) => ctx.cbc_mac_ctx = val,
-            Err(err) => return Err(err),
-        }
+        ctx.cbc_mac_ctx = self.aes_cbcmac_update(ctx.cbc_mac_ctx, &b)?;
 
         if aad_size > 0 {
             // Loading AAD size in ctx buffer.
@@ -263,17 +227,10 @@ impl AteccDevice {
 
         // Init CTR mode context with the counter value obtained from previous step.
         let counter_size: u8 = (ATCA_AES_DATA_SIZE - iv.len() - 1) as u8;
-        match self.aes_ctr_init(slot_id, counter_size, &counter) {
-            Ok(val) => ctx.ctr_ctx = val,
-            Err(err) => return Err(err),
-        }
+        ctx.ctr_ctx = self.aes_ctr_init(slot_id, counter_size, &counter)?;
 
         // Increment the counter to skip the first block, first will be later reused to get tag.
-        match self.aes_ctr_increment(ctx.ctr_ctx) {
-            Ok(val) => ctx.ctr_ctx = val,
-            Err(err) => return Err(err),
-        }
-
+        ctx.ctr_ctx = self.aes_ctr_increment(ctx.ctr_ctx)?;
         Ok(ctx)
     }
 
@@ -309,22 +266,17 @@ impl AteccDevice {
         }
 
         // Process the current block
-        match self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &temp_ctx.partial_aad) {
-            Ok(val) => temp_ctx.cbc_mac_ctx = val,
-            Err(err) => return Err(err),
-        }
+        temp_ctx.cbc_mac_ctx =
+            self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &temp_ctx.partial_aad)?;
 
         // Process any additional blocks
         aad_size -= copy_size; // Adjust to the remaining aad bytes
         let block_count = aad_size / ATCA_AES_DATA_SIZE;
         if block_count > 0 {
-            match self.aes_cbcmac_update(
+            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(
                 temp_ctx.cbc_mac_ctx,
                 &data[copy_size..((block_count * ATCA_AES_DATA_SIZE) + copy_size)],
-            ) {
-                Ok(val) => temp_ctx.cbc_mac_ctx = val,
-                Err(err) => return Err(err),
-            }
+            )?;
         }
 
         // Save any remaining data
@@ -346,14 +298,10 @@ impl AteccDevice {
             buffer[..temp_ctx.partial_aad_size]
                 .copy_from_slice(&temp_ctx.partial_aad[..temp_ctx.partial_aad_size]);
 
-            match self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &buffer) {
-                Ok(val) => {
-                    temp_ctx.cbc_mac_ctx = val;
-                    // Reset ctx partial aad size variable
-                    temp_ctx.partial_aad_size = 0
-                }
-                Err(err) => return Err(err),
-            }
+            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &buffer)?;
+
+            // Reset ctx partial aad size variable
+            temp_ctx.partial_aad_size = 0
         }
 
         Ok(temp_ctx)
@@ -368,11 +316,7 @@ impl AteccDevice {
         is_encrypt: bool,
     ) -> Result<AtcaAesCcmCtx, AtcaStatus> {
         let mut temp_ctx = ctx;
-
-        match self.aes_ccm_aad_finish(temp_ctx) {
-            Ok(val) => temp_ctx = val,
-            Err(err) => return Err(err),
-        }
+        temp_ctx = self.aes_ccm_aad_finish(temp_ctx)?;
 
         if data.is_empty() {
             // Nothing to do
@@ -385,20 +329,14 @@ impl AteccDevice {
         while data_idx < input_size {
             if 0 == (temp_ctx.data_size % (ATCA_AES_DATA_SIZE as u32)) {
                 // Need to calculate next encrypted counter block
-                match self.aes_encrypt_block(
+                temp_ctx.enc_cb = self.aes_encrypt_block(
                     temp_ctx.ctr_ctx.key_id,
                     temp_ctx.ctr_ctx.key_block,
                     &temp_ctx.ctr_ctx.cb,
-                ) {
-                    Ok(val) => temp_ctx.enc_cb = val,
-                    Err(err) => return Err(err),
-                }
+                )?;
 
                 // Increment counter
-                match self.aes_ctr_increment(temp_ctx.ctr_ctx) {
-                    Ok(val) => temp_ctx.ctr_ctx = val,
-                    Err(err) => return Err(err),
-                }
+                temp_ctx.ctr_ctx = self.aes_ctr_increment(temp_ctx.ctr_ctx)?;
             }
 
             // Process data with current encrypted counter block
@@ -421,10 +359,8 @@ impl AteccDevice {
 
             if 0 == (temp_ctx.data_size % (ATCA_AES_DATA_SIZE as u32)) {
                 // Adding data to CBC-MAC to calculate tag
-                match self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &temp_ctx.ciphertext_block[..]) {
-                    Ok(val) => temp_ctx.cbc_mac_ctx = val,
-                    Err(err) => return Err(err),
-                }
+                temp_ctx.cbc_mac_ctx =
+                    self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &temp_ctx.ciphertext_block[..])?;
             }
         }
 
@@ -434,19 +370,15 @@ impl AteccDevice {
     /// Complete a CCM decrypt operation authenticating provided tag
     #[inline]
     fn aes_ccm_decrypt_finish(&self, ctx: AtcaAesCcmCtx, tag: &[u8]) -> Result<bool, AtcaStatus> {
-        match self.aes_ccm_finish(ctx) {
-            Ok(val) => {
-                let matching = tag
-                    .iter()
-                    .zip(val.iter())
-                    .filter(|&(tag, val)| tag == val)
-                    .count();
-                match matching == tag.len() && matching == val.len() {
-                    true => Ok(true),
-                    false => Ok(false),
-                }
-            }
-            Err(err) => Err(err),
+        let val = self.aes_ccm_finish(ctx)?;
+        let matching = tag
+            .iter()
+            .zip(val.iter())
+            .filter(|&(tag, val)| tag == val)
+            .count();
+        match matching == tag.len() && matching == val.len() {
+            true => Ok(true),
+            false => Ok(false),
         }
     }
 
@@ -464,19 +396,14 @@ impl AteccDevice {
             buffer[..end_idx].copy_from_slice(&temp_ctx.ciphertext_block[..end_idx]);
 
             // Adding data to CBC-MAC to calculate tag
-            match self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &buffer) {
-                Ok(val) => temp_ctx.cbc_mac_ctx = val,
-                Err(err) => return Err(err),
-            }
+            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &buffer)?;
         }
 
         // Update tag size
         let tag_size = ((temp_ctx.m * 2) + 2) as usize;
 
-        match self.aes_cbcmac_finish(temp_ctx.cbc_mac_ctx, tag_size) {
-            Ok(val) => t[..val.len()].copy_from_slice(&val[..val.len()]),
-            Err(err) => return Err(err),
-        }
+        let val = self.aes_cbcmac_finish(temp_ctx.cbc_mac_ctx, tag_size)?;
+        t[..val.len()].copy_from_slice(&val[..val.len()]);
 
         // Init CTR mode context
         let mut slot = temp_ctx.ctr_ctx.key_id as u8;
@@ -484,15 +411,9 @@ impl AteccDevice {
             slot = ATCA_ATECC_SLOTS_COUNT;
         }
 
-        match self.aes_ctr_init(slot, temp_ctx.ctr_ctx.key_block, &temp_ctx.counter) {
-            Ok(val) => temp_ctx.ctr_ctx = val,
-            Err(err) => return Err(err),
-        }
-
-        match self.aes_ctr_block(temp_ctx.ctr_ctx, &t, &mut u) {
-            Ok(val) => temp_ctx.ctr_ctx = val,
-            Err(err) => return Err(err),
-        }
+        temp_ctx.ctr_ctx =
+            self.aes_ctr_init(slot, temp_ctx.ctr_ctx.key_block, &temp_ctx.counter)?;
+        temp_ctx.ctr_ctx = self.aes_ctr_block(temp_ctx.ctr_ctx, &t, &mut u)?;
 
         tag.copy_from_slice(&u);
         tag.resize(tag_size, 0x00);
@@ -640,14 +561,10 @@ impl AteccDevice {
             let end_pos = start_pos + ATCA_AES_DATA_SIZE;
             idx += 1;
 
-            match self.aes_cbc_encrypt_block(temp_ctx.cbc_ctx, &data[start_pos..end_pos]) {
-                Ok(val) => {
-                    match val.len() {
-                        ATCA_AES_DATA_SIZE => temp_ctx.cbc_ctx.ciphertext.copy_from_slice(&val), // Save copy of ciphertext for next block operation
-                        _ => return Err(AtcaStatus::AtcaFuncFail),
-                    }
-                }
-                Err(err) => return Err(err),
+            let val = self.aes_cbc_encrypt_block(temp_ctx.cbc_ctx, &data[start_pos..end_pos])?;
+            match val.len() {
+                ATCA_AES_DATA_SIZE => temp_ctx.cbc_ctx.ciphertext.copy_from_slice(&val), // Save copy of ciphertext for next block operation
+                _ => return Err(AtcaStatus::AtcaFuncFail),
             }
         }
 
@@ -679,16 +596,15 @@ impl AteccDevice {
         }
 
         // Check for incomplete data block
-        match 0 == ctx.block_size {
-            true => {
-                // All processing is already done, copying the mac to result buffer
-                tag[..tag_size].copy_from_slice(&ctx.cbc_ctx.ciphertext[..tag_size]);
-                tag.resize(tag_size, 0x00);
-                tag.shrink_to_fit();
-                Ok(tag)
-            }
-            false => Err(AtcaStatus::AtcaInvalidSize), // Returns INVALID_SIZE if incomplete blocks are present
+        if ctx.block_size != 0 {
+            return Err(AtcaStatus::AtcaInvalidSize) // Returns INVALID_SIZE if incomplete blocks are present
         }
+
+        // All processing is already done, copying the mac to result buffer
+        tag[..tag_size].copy_from_slice(&ctx.cbc_ctx.ciphertext[..tag_size]);
+        tag.resize(tag_size, 0x00);
+        tag.shrink_to_fit();
+        Ok(tag)
     }
 
     /// Encrypt a block of data using CBC mode and a key within the device.
@@ -711,10 +627,8 @@ impl AteccDevice {
         }
 
         // Block encrypt of input data
-        match self.aes_encrypt_block(ctx.key_id, ctx.key_block, &input) {
-            Ok(val) => Ok(val.to_vec()),
-            Err(err) => Err(err),
-        }
+        let val = self.aes_encrypt_block(ctx.key_id, ctx.key_block, &input)?;
+        Ok(val.to_vec())
     }
 
     /// Perform an AES-128 encrypt operation with a key in the device

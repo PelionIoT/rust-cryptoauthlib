@@ -18,17 +18,12 @@ impl AteccDevice {
         slot_id: u8,
         data: &mut [u8],
     ) -> Result<Vec<u8>, AtcaStatus> {
-        let mut ctx: atca_aes_gcm_ctx_t;
-
         let mut tag_length: u8 = ATCA_AES_DATA_SIZE as u8;
         if let Some(val) = &aead_param.tag_length {
             tag_length = *val
         };
 
-        match self.common_aes_gcm(aead_param, slot_id, data) {
-            Err(err) => return Err(err),
-            Ok(val) => ctx = val,
-        }
+        let mut ctx: atca_aes_gcm_ctx_t = self.common_aes_gcm(aead_param, slot_id, data)?;
 
         if !data.is_empty() {
             let mut start_pos: usize = 0;
@@ -38,31 +33,24 @@ impl AteccDevice {
                 let block = &data[start_pos..(start_pos + shift)];
                 let mut encr_block: [u8; ATCA_AES_DATA_SIZE] = [0; ATCA_AES_DATA_SIZE];
 
-                match self.aes_gcm_encrypt_update(ctx, &block, &mut encr_block) {
-                    Err(err) => return Err(err),
-                    Ok(val) => {
-                        ctx = val;
-                        data[start_pos..(shift + start_pos)].clone_from_slice(&encr_block[..shift]);
+                ctx = self.aes_gcm_encrypt_update(ctx, &block, &mut encr_block)?;
+                data[start_pos..(shift + start_pos)].clone_from_slice(&encr_block[..shift]);
 
-                        start_pos += shift;
-                        let remaining_bytes = data.len() - start_pos;
-                        match 0 == remaining_bytes {
-                            true => shift = 0,
-                            false => {
-                                if remaining_bytes < ATCA_AES_DATA_SIZE {
-                                    shift = remaining_bytes
-                                }
-                            }
+                start_pos += shift;
+                let remaining_bytes = data.len() - start_pos;
+                match 0 == remaining_bytes {
+                    true => shift = 0,
+                    false => {
+                        if remaining_bytes < ATCA_AES_DATA_SIZE {
+                            shift = remaining_bytes
                         }
                     }
                 }
             }
         }
 
-        match self.aes_gcm_encrypt_finish(ctx, tag_length) {
-            Err(err) => Err(err),
-            Ok(tag) => Ok(tag),
-        }
+        let tag = self.aes_gcm_encrypt_finish(ctx, tag_length)?;
+        Ok(tag)
     }
 
     /// function that performs decryption in AES GCM mode
@@ -80,12 +68,7 @@ impl AteccDevice {
             return Err(AtcaStatus::AtcaBadParam);
         }
 
-        let mut ctx: atca_aes_gcm_ctx_t;
-
-        match self.common_aes_gcm(aead_param, slot_id, data) {
-            Err(err) => return Err(err),
-            Ok(val) => ctx = val,
-        }
+        let mut ctx: atca_aes_gcm_ctx_t = self.common_aes_gcm(aead_param, slot_id, data)?;
 
         if !data.is_empty() {
             let mut start_pos: usize = 0;
@@ -95,31 +78,24 @@ impl AteccDevice {
                 let block = &data[start_pos..(start_pos + shift)];
                 let mut encr_block: [u8; ATCA_AES_DATA_SIZE] = [0; ATCA_AES_DATA_SIZE];
 
-                match self.aes_gcm_decrypt_update(ctx, &block, &mut encr_block) {
-                    Err(err) => return Err(err),
-                    Ok(val) => {
-                        ctx = val;
-                        data[start_pos..(shift + start_pos)].clone_from_slice(&encr_block[..shift]);
+                ctx = self.aes_gcm_decrypt_update(ctx, &block, &mut encr_block)?;
+                data[start_pos..(shift + start_pos)].clone_from_slice(&encr_block[..shift]);
 
-                        start_pos += shift;
-                        let remaining_bytes = data.len() - start_pos;
-                        match 0 == remaining_bytes {
-                            true => shift = 0,
-                            false => {
-                                if remaining_bytes < ATCA_AES_DATA_SIZE {
-                                    shift = remaining_bytes
-                                }
-                            }
+                start_pos += shift;
+                let remaining_bytes = data.len() - start_pos;
+                match 0 == remaining_bytes {
+                    true => shift = 0,
+                    false => {
+                        if remaining_bytes < ATCA_AES_DATA_SIZE {
+                            shift = remaining_bytes
                         }
                     }
                 }
             }
         }
 
-        match self.aes_gcm_decrypt_finish(ctx, &tag_to_check) {
-            Err(err) => Err(err),
-            Ok(is_verified) => Ok(is_verified),
-        }
+        let is_verified = self.aes_gcm_decrypt_finish(ctx, &tag_to_check)?;
+        Ok(is_verified)
     }
 
     /// a helper function implementing common functionality for AES GCM encryption and decryption
@@ -157,44 +133,31 @@ impl AteccDevice {
             return Err(AtcaStatus::AtcaInvalidSize);
         }
 
-        let mut ctx: atca_aes_gcm_ctx_t;
-
-        let mut result = AtcaStatus::AtcaSuccess;
         if let Some(val) = &aead_param.key {
             let mut key: Vec<u8> = val.to_vec();
             key.resize(ATCA_NONCE_SIZE, 0x00);
-            result = self.nonce(NonceTarget::TempKey, &key)
-        }
-
-        match AtcaStatus::AtcaSuccess != result {
-            true => return Err(result),
-            false => {
-                let iv: Vec<u8> = aead_param.nonce;
-                match self.aes_gcm_init(slot_id, &iv) {
-                    Err(err) => return Err(err),
-                    Ok(val) => ctx = val,
-                }
+            let result = self.nonce(NonceTarget::TempKey, &key);
+            if AtcaStatus::AtcaSuccess != result {
+                return Err(result);
             }
         }
+
+        let iv: Vec<u8> = aead_param.nonce;
+        let mut ctx = self.aes_gcm_init(slot_id, &iv)?;
 
         if let Some(data_to_sign) = &aead_param.additional_data {
             let mut start_pos: usize = 0;
             let mut shift: usize = min(data_to_sign.len(), ATCA_AES_DATA_SIZE);
             while shift > 0 {
                 let block = &data_to_sign[start_pos..(start_pos + shift)];
-                match self.aes_gcm_aad_update(ctx, &block) {
-                    Err(err) => return Err(err),
-                    Ok(val) => {
-                        ctx = val;
-                        start_pos += shift;
-                        let remaining_bytes = data_to_sign.len() - start_pos;
-                        match 0 == remaining_bytes {
-                            true => shift = 0,
-                            false => {
-                                if remaining_bytes < ATCA_AES_DATA_SIZE {
-                                    shift = remaining_bytes
-                                }
-                            }
+                ctx = self.aes_gcm_aad_update(ctx, &block)?;
+                start_pos += shift;
+                let remaining_bytes = data_to_sign.len() - start_pos;
+                match 0 == remaining_bytes {
+                    true => shift = 0,
+                    false => {
+                        if remaining_bytes < ATCA_AES_DATA_SIZE {
+                            shift = remaining_bytes
                         }
                     }
                 }
