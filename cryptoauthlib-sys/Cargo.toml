@@ -1,6 +1,6 @@
 [package]
 name = "cryptoauthlib-sys"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
            "Michal Protasowicki <michal.protasowicki@globallogic.com>",
            "Krzysztof Bembnista <krzysztof.bembnista@globallogic.com>",
