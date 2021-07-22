@@ -7,7 +7,7 @@ authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
            "Artur Kazimierski <artur.kazimierski@@globallogic.com>"]
 edition = "2018"
 description = "Automatically generated Rust bindings for CryptoAuthentication Library calls."
-repository = "https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib/"
+repository = "https://github.com/PelionIoT/rust-cryptoauthlib/"
 readme = "README.md"
 keywords = ["cryptoauthlib"]
 categories = ["cryptography", "hardware-support", "ffi-bindings"]

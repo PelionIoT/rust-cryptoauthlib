@@ -7,7 +7,7 @@ authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
            "Artur Kazimierski <artur.kazimierski@@globallogic.com>"]
 edition = "2018"
 description = "Rust wrappers for CryptoAuthentication Library bindings."
-repository = "https://github.com/RobertDrazkowskiGL/rust-cryptoauthlib/"
+repository = "https://github.com/PelionIoT/rust-cryptoauthlib/"
 readme = "README.md"
 keywords = ["cryptoauthlib", "crypto", "cryptography"]
 categories = ["cryptography", "hardware-support"]
