@@ -106,19 +106,19 @@ fn aead_gcm_encrypt_proper_data() {
         ..Default::default()
     };
 
-    let mut data_64_no_text: [u8; 0x00] = [0x00; 0x00];
-    let mut data_64_no_aad: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64_no_aad.clone_from_slice(&plain_text[..DATA_64_SIZE]);
-    let mut data_64: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64.clone_from_slice(&plain_text[..DATA_64_SIZE]);
-    let mut data_60: [u8; DATA_60_SIZE] = [0x00; DATA_60_SIZE];
-    data_60.clone_from_slice(&plain_text[..DATA_60_SIZE]);
-    let mut data_60_short_tag: [u8; DATA_60_SIZE] = [0x00; DATA_60_SIZE];
-    data_60_short_tag.clone_from_slice(&plain_text[..DATA_60_SIZE]);
-    let mut data_64_internal_key: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64_internal_key.clone_from_slice(&plain_text[..DATA_64_SIZE]);
-    let mut data_60_internal_key: [u8; DATA_60_SIZE] = [0x00; DATA_60_SIZE];
-    data_60_internal_key.clone_from_slice(&plain_text[..DATA_60_SIZE]);
+    let mut data_64_no_text: Vec<u8> = Vec::new();
+    let mut data_64_no_aad: Vec<u8> = Vec::new();
+    data_64_no_aad.extend_from_slice(&plain_text[..DATA_64_SIZE]);
+    let mut data_64: Vec<u8> = Vec::new();
+    data_64.extend_from_slice(&plain_text[..DATA_64_SIZE]);
+    let mut data_60: Vec<u8> = Vec::new();
+    data_60.extend_from_slice(&plain_text[..DATA_60_SIZE]);
+    let mut data_60_short_tag: Vec<u8> = Vec::new();
+    data_60_short_tag.extend_from_slice(&plain_text[..DATA_60_SIZE]);
+    let mut data_64_internal_key: Vec<u8> = Vec::new();
+    data_64_internal_key.extend_from_slice(&plain_text[..DATA_64_SIZE]);
+    let mut data_60_internal_key: Vec<u8> = Vec::new();
+    data_60_internal_key.extend_from_slice(&plain_text[..DATA_60_SIZE]);
 
     let mut result_tag_64_no_aad = vec![0x00; ATCA_AES_KEY_SIZE];
     let mut result_tag_64_no_text = vec![0x00; ATCA_AES_KEY_SIZE];
@@ -245,29 +245,20 @@ fn aead_gcm_encrypt_proper_data() {
 
     assert_eq!(result_import_key, expected_result_import_key);
     if chip_is_locked && device.is_aes_enabled() {
-        assert_eq!(result_tag_64_no_aad, tag_64_no_aad);
-        assert_eq!(data_64_no_aad.to_vec(), cipher_text.to_vec());
-        assert_eq!(result_tag_64_no_text, tag_64_no_text);
-        assert_eq!(data_64_no_text.is_empty(), true);
-        assert_eq!(result_tag_64, tag_64);
-        assert_eq!(data_64.to_vec(), cipher_text.to_vec());
-        assert_eq!(result_tag_60, tag_60);
-        assert_eq!(data_60.to_vec(), cipher_text[..DATA_60_SIZE].to_vec());
-        assert_eq!(
-            result_tag_60_short.to_vec(),
-            tag_60[..SHORT_TAG_SIZE].to_vec()
-        );
-        assert_eq!(
-            data_60_short_tag.to_vec(),
-            cipher_text[..DATA_60_SIZE].to_vec()
-        );
-        assert_eq!(result_tag_64_internal_key, tag_64);
-        assert_eq!(data_64_internal_key.to_vec(), cipher_text.to_vec());
-        assert_eq!(result_tag_60_internal_key, tag_60);
-        assert_eq!(
-            data_60_internal_key.to_vec(),
-            cipher_text[..DATA_60_SIZE].to_vec()
-        );
+        assert_eq!(result_tag_64_no_aad, tag_64_no_aad.to_vec());
+        assert_eq!(data_64_no_aad, cipher_text.to_vec());
+        assert_eq!(result_tag_64_no_text, tag_64_no_text.to_vec());
+        assert!(data_64_no_text.is_empty());
+        assert_eq!(result_tag_64, tag_64.to_vec());
+        assert_eq!(data_64, cipher_text.to_vec());
+        assert_eq!(result_tag_60, tag_60.to_vec());
+        assert_eq!(data_60, cipher_text[..DATA_60_SIZE].to_vec());
+        assert_eq!(result_tag_60_short, tag_60[..SHORT_TAG_SIZE].to_vec());
+        assert_eq!(data_60_short_tag, cipher_text[..DATA_60_SIZE].to_vec());
+        assert_eq!(result_tag_64_internal_key, tag_64.to_vec());
+        assert_eq!(data_64_internal_key, cipher_text.to_vec());
+        assert_eq!(result_tag_60_internal_key, tag_60.to_vec());
+        assert_eq!(data_60_internal_key, cipher_text[..DATA_60_SIZE].to_vec());
     }
     assert_eq!(result_64_no_aad, expected_64_no_aad);
     assert_eq!(result_64_no_text, expected_64_no_text);
@@ -285,7 +276,7 @@ fn aead_gcm_encrypt_bad_data() {
 
     let mut chip_is_locked: bool = true;
 
-    let mut data: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+    let mut data: Vec<u8> = vec![0x00; ATCA_AES_DATA_SIZE];
     let param_ok = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
@@ -415,7 +406,7 @@ fn aead_gcm_encrypt_bad_data() {
     }
 
     // no data to sign and encrypt
-    let mut empty_data: [u8; 0] = [];
+    let mut empty_data: Vec<u8> = Vec::new();
     match device.aead_encrypt(
         AeadAlgorithm::Gcm(param_bad_4),
         ATCA_ATECC_SLOTS_COUNT,
@@ -567,19 +558,19 @@ fn aead_gcm_decrypt_proper_data() {
         ..Default::default()
     };
 
-    let mut data_64_no_text: [u8; 0x00] = [0x00; 0x00];
-    let mut data_64_no_aad: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64_no_aad.clone_from_slice(&cipher_text[..DATA_64_SIZE]);
-    let mut data_64: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64.clone_from_slice(&cipher_text[..DATA_64_SIZE]);
-    let mut data_60: [u8; DATA_60_SIZE] = [0x00; DATA_60_SIZE];
-    data_60.clone_from_slice(&cipher_text[..DATA_60_SIZE]);
-    let mut data_60_short_tag: [u8; DATA_60_SIZE] = [0x00; DATA_60_SIZE];
-    data_60_short_tag.clone_from_slice(&cipher_text[..DATA_60_SIZE]);
-    let mut data_64_internal_key: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64_internal_key.clone_from_slice(&cipher_text[..DATA_64_SIZE]);
-    let mut data_60_internal_key: [u8; DATA_60_SIZE] = [0x00; DATA_60_SIZE];
-    data_60_internal_key.clone_from_slice(&cipher_text[..DATA_60_SIZE]);
+    let mut data_64_no_text: Vec<u8> = Vec::new();
+    let mut data_64_no_aad: Vec<u8> = Vec::new();
+    data_64_no_aad.extend_from_slice(&cipher_text[..DATA_64_SIZE]);
+    let mut data_64: Vec<u8> = Vec::new();
+    data_64.extend_from_slice(&cipher_text[..DATA_64_SIZE]);
+    let mut data_60: Vec<u8> = Vec::new();
+    data_60.extend_from_slice(&cipher_text[..DATA_60_SIZE]);
+    let mut data_60_short_tag: Vec<u8> = Vec::new();
+    data_60_short_tag.extend_from_slice(&cipher_text[..DATA_60_SIZE]);
+    let mut data_64_internal_key: Vec<u8> = Vec::new();
+    data_64_internal_key.extend_from_slice(&cipher_text[..DATA_64_SIZE]);
+    let mut data_60_internal_key: Vec<u8> = Vec::new();
+    data_60_internal_key.extend_from_slice(&cipher_text[..DATA_60_SIZE]);
 
     let mut result_tag_64_no_aad: bool = false;
     let mut result_tag_64_no_text: bool = false;
@@ -706,26 +697,20 @@ fn aead_gcm_decrypt_proper_data() {
 
     assert_eq!(result_import_key, expected_result_import_key);
     if chip_is_locked && device.is_aes_enabled() {
-        assert_eq!(result_tag_64_no_aad, true);
-        assert_eq!(data_64_no_aad, plain_text);
-        assert_eq!(result_tag_64_no_text, true);
-        assert_eq!(data_64_no_text.is_empty(), true);
-        assert_eq!(result_tag_64, true);
-        assert_eq!(data_64, plain_text);
-        assert_eq!(result_tag_60, true);
-        assert_eq!(data_60.to_vec(), plain_text[..DATA_60_SIZE].to_vec());
-        assert_eq!(result_tag_60_short, true);
-        assert_eq!(
-            data_60_short_tag.to_vec(),
-            plain_text[..DATA_60_SIZE].to_vec()
-        );
-        assert_eq!(result_tag_64_internal_key, true);
-        assert_eq!(data_64_internal_key, plain_text);
-        assert_eq!(result_tag_60_internal_key, true);
-        assert_eq!(
-            data_60_internal_key.to_vec(),
-            plain_text[..DATA_60_SIZE].to_vec()
-        );
+        assert!(result_tag_64_no_aad);
+        assert_eq!(data_64_no_aad, plain_text.to_vec());
+        assert!(result_tag_64_no_text);
+        assert!(data_64_no_text.is_empty());
+        assert!(result_tag_64);
+        assert_eq!(data_64, plain_text.to_vec());
+        assert!(result_tag_60);
+        assert_eq!(data_60, plain_text[..DATA_60_SIZE].to_vec());
+        assert!(result_tag_60_short);
+        assert_eq!(data_60_short_tag, plain_text[..DATA_60_SIZE].to_vec());
+        assert!(result_tag_64_internal_key);
+        assert_eq!(data_64_internal_key, plain_text.to_vec());
+        assert!(result_tag_60_internal_key);
+        assert_eq!(data_60_internal_key, plain_text[..DATA_60_SIZE].to_vec());
     }
     assert_eq!(result_64_no_aad, expected_64_no_aad);
     assert_eq!(result_64_no_text, expected_64_no_text);
@@ -745,7 +730,7 @@ fn aead_gcm_decrypt_bad_data() {
 
     let mut chip_is_locked: bool = true;
 
-    let mut data: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+    let mut data: Vec<u8> = vec![0x00; ATCA_AES_DATA_SIZE];
     let param_ok = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; ATCA_AES_GCM_IV_STD_LENGTH],
@@ -908,7 +893,7 @@ fn aead_gcm_decrypt_bad_data() {
     }
 
     // no data to verify sign and decrypt
-    let mut empty_data: [u8; 0] = [];
+    let mut empty_data: Vec<u8> = Vec::new();
     match device.aead_decrypt(
         AeadAlgorithm::Gcm(param_bad_5),
         ATCA_ATECC_SLOTS_COUNT,
@@ -965,6 +950,6 @@ fn aead_gcm_decrypt_bad_data() {
     assert_eq!(result_bad_9, expected_bad_9);
     assert_eq!(result_bad_10, expected_bad_10);
     if AtcaStatus::AtcaUnknown == result_bad_10 {
-        assert_eq!(tags_match, false);
+        assert!(!tags_match);
     }
 }

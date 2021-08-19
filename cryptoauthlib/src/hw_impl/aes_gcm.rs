@@ -16,7 +16,7 @@ impl AteccDevice {
         &self,
         aead_param: AeadParam,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<Vec<u8>, AtcaStatus> {
         let mut tag_length: u8 = ATCA_AES_DATA_SIZE as u8;
         if let Some(val) = &aead_param.tag_length {
@@ -58,7 +58,7 @@ impl AteccDevice {
         &self,
         aead_param: AeadParam,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus> {
         let tag_to_check: Vec<u8>;
 
@@ -103,7 +103,7 @@ impl AteccDevice {
         &self,
         aead_param: AeadParam,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<atca_aes_gcm_ctx_t, AtcaStatus> {
         const MAX_IV_SIZE: usize = ATCA_AES_DATA_SIZE - 1;
         const MIN_IV_SIZE: usize = ATCA_AES_GCM_IV_STD_LENGTH;
@@ -127,8 +127,8 @@ impl AteccDevice {
                 && ((aead_param.tag_length < Some(MIN_TAG_SIZE as u8))
                     || (aead_param.tag_length > Some(MAX_TAG_SIZE as u8))))
             || (aead_param.tag.is_some()
-                && ((aead_param.tag.clone().unwrap().len() < MIN_TAG_SIZE)
-                    || (aead_param.tag.clone().unwrap().len() > MAX_TAG_SIZE)))
+                && ((aead_param.tag.as_ref().unwrap().len() < MIN_TAG_SIZE)
+                    || (aead_param.tag.as_ref().unwrap().len() > MAX_TAG_SIZE)))
         {
             return Err(AtcaStatus::AtcaInvalidSize);
         }

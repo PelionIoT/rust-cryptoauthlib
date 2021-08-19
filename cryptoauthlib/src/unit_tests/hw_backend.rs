@@ -462,7 +462,7 @@ fn sign_verify_hash() {
 
     if chip_is_fully_locked {
         assert_eq!(signature.len(), ATCA_SIG_SIZE);
-        assert_eq!(is_verified, true);
+        assert!(is_verified);
     }
     assert_eq!(sign_internal, expected_sign_internal);
     assert_eq!(verify_external_result, expected_verify_external_result);
@@ -536,7 +536,7 @@ fn cmp_config_zone() {
 
     assert_eq!(device_read_config_zone, AtcaStatus::AtcaSuccess);
     assert_eq!(device_cmp_config_zone, AtcaStatus::AtcaSuccess);
-    assert_eq!(same_config, true);
+    assert!(same_config);
 }
 
 #[test]
@@ -548,7 +548,7 @@ fn is_configuration_locked() {
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
-    assert_eq!(is_locked, true);
+    assert!(is_locked);
 }
 
 #[test]
@@ -560,7 +560,7 @@ fn is_data_zone_locked() {
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
-    assert_eq!(is_locked, true);
+    assert!(is_locked);
 }
 
 #[test]
@@ -584,11 +584,11 @@ fn get_config_from_config_zone() {
     assert_eq!(slots.len(), usize::from(ATCA_ATECC_SLOTS_COUNT));
     assert_eq!(slots[0].id, 0);
     assert_eq!(slots[15].id, 15);
-    assert_eq!(slots[0].is_locked, false);
-    assert_eq!(slots[6].is_locked, true);
-    assert_eq!(slots[15].is_locked, true);
-    assert_eq!(slots[0].config.is_secret, true);
-    assert_eq!(slots[1].config.is_secret, false);
+    assert!(!slots[0].is_locked);
+    assert!(slots[6].is_locked);
+    assert!(slots[15].is_locked);
+    assert!(slots[0].config.is_secret);
+    assert!(!slots[1].config.is_secret);
 }
 
 #[test]

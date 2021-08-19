@@ -76,17 +76,17 @@ fn aead_ccm_encrypt_proper_data() {
     let tag_4 = [0x4D, 0xAC, 0x25, 0x5D];
     let cipher_text_4 = [0x71, 0x62, 0x01, 0x5B];
 
-    let mut data_64_no_text: [u8; 0x00] = [0x00; 0x00];
-    let mut data_64_no_aad: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64_no_aad.clone_from_slice(&plain_text[..DATA_64_SIZE]);
-    let mut data_24: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
-    data_24.clone_from_slice(&plain_text[..DATA_24_SIZE]);
-    let mut data_16: [u8; DATA_16_SIZE] = [0x00; DATA_16_SIZE];
-    data_16.clone_from_slice(&plain_text[..DATA_16_SIZE]);
-    let mut data_4: [u8; DATA_4_SIZE] = [0x00; DATA_4_SIZE];
-    data_4.clone_from_slice(&plain_text[..DATA_4_SIZE]);
-    let mut data_24_internal_key: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
-    data_24_internal_key.clone_from_slice(&plain_text[..DATA_24_SIZE]);
+    let mut data_64_no_text: Vec<u8> = Vec::new();
+    let mut data_64_no_aad: Vec<u8> = Vec::new();
+    data_64_no_aad.extend_from_slice(&plain_text[..DATA_64_SIZE]);
+    let mut data_24: Vec<u8> = Vec::new();
+    data_24.extend_from_slice(&plain_text[..DATA_24_SIZE]);
+    let mut data_16: Vec<u8> = Vec::new();
+    data_16.extend_from_slice(&plain_text[..DATA_16_SIZE]);
+    let mut data_4: Vec<u8> = Vec::new();
+    data_4.extend_from_slice(&plain_text[..DATA_4_SIZE]);
+    let mut data_24_internal_key: Vec<u8> = Vec::new();
+    data_24_internal_key.extend_from_slice(&plain_text[..DATA_24_SIZE]);
 
     let param_64_no_aad = AeadParam {
         key: Some(aes_key),
@@ -242,18 +242,18 @@ fn aead_ccm_encrypt_proper_data() {
 
     assert_eq!(result_import_key, expected_result_import_key);
     if chip_is_locked && device.is_aes_enabled() {
-        assert_eq!(result_tag_64_no_text, tag_64_no_text);
-        assert_eq!(data_64_no_text.is_empty(), true);
-        assert_eq!(result_tag_64_no_aad, tag_64_no_aad);
-        assert_eq!(data_64_no_aad.to_vec(), cipher_text_64_no_aad.to_vec());
-        assert_eq!(result_tag_24, tag_24);
-        assert_eq!(data_24.to_vec(), cipher_text_24.to_vec());
-        assert_eq!(result_tag_16, tag_16);
-        assert_eq!(data_16.to_vec(), cipher_text_16.to_vec());
-        assert_eq!(result_tag_4, tag_4);
-        assert_eq!(data_4.to_vec(), cipher_text_4.to_vec());
-        assert_eq!(result_tag_24_internal_key, tag_24);
-        assert_eq!(data_24_internal_key.to_vec(), cipher_text_24.to_vec());
+        assert_eq!(result_tag_64_no_text, tag_64_no_text.to_vec());
+        assert!(data_64_no_text.is_empty());
+        assert_eq!(result_tag_64_no_aad, tag_64_no_aad.to_vec());
+        assert_eq!(data_64_no_aad, cipher_text_64_no_aad.to_vec());
+        assert_eq!(result_tag_24, tag_24.to_vec());
+        assert_eq!(data_24, cipher_text_24.to_vec());
+        assert_eq!(result_tag_16, tag_16.to_vec());
+        assert_eq!(data_16, cipher_text_16.to_vec());
+        assert_eq!(result_tag_4, tag_4.to_vec());
+        assert_eq!(data_4, cipher_text_4.to_vec());
+        assert_eq!(result_tag_24_internal_key, tag_24.to_vec());
+        assert_eq!(data_24_internal_key, cipher_text_24.to_vec());
     }
     assert_eq!(result_64_no_text, expected_64_no_text);
     assert_eq!(result_64_no_aad, expected_64_no_aad);
@@ -275,7 +275,7 @@ fn aead_ccm_encrypt_bad_data() {
 
     let mut chip_is_locked: bool = true;
 
-    let mut data: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+    let mut data: Vec<u8> = vec![0x00; ATCA_AES_DATA_SIZE];
     let param_ok = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; AES_CCM_IV_MIN_LENGTH],
@@ -426,7 +426,7 @@ fn aead_ccm_encrypt_bad_data() {
     }
 
     // no data to sign and encrypt
-    let mut empty_data: [u8; 0] = [];
+    let mut empty_data: Vec<u8> = Vec::new();
     match device.aead_encrypt(
         AeadAlgorithm::Ccm(param_bad_4),
         ATCA_ATECC_SLOTS_COUNT,
@@ -601,17 +601,17 @@ fn aead_ccm_decrypt_proper_data() {
         ..Default::default()
     };
 
-    let mut data_64_no_text: [u8; 0x00] = [0x00; 0x00];
-    let mut data_64_no_aad: [u8; DATA_64_SIZE] = [0x00; DATA_64_SIZE];
-    data_64_no_aad.clone_from_slice(&cipher_text_64_no_aad);
-    let mut data_24: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
-    data_24.clone_from_slice(&cipher_text_24);
-    let mut data_16: [u8; DATA_16_SIZE] = [0x00; DATA_16_SIZE];
-    data_16.clone_from_slice(&cipher_text_16);
-    let mut data_4: [u8; DATA_4_SIZE] = [0x00; DATA_4_SIZE];
-    data_4.clone_from_slice(&cipher_text_4);
-    let mut data_24_internal_key: [u8; DATA_24_SIZE] = [0x00; DATA_24_SIZE];
-    data_24_internal_key.clone_from_slice(&cipher_text_24);
+    let mut data_64_no_text: Vec<u8> = Vec::new();
+    let mut data_64_no_aad: Vec<u8> = Vec::new();
+    data_64_no_aad.extend_from_slice(&cipher_text_64_no_aad);
+    let mut data_24: Vec<u8> = Vec::new();
+    data_24.extend_from_slice(&cipher_text_24);
+    let mut data_16: Vec<u8> = Vec::new();
+    data_16.extend_from_slice(&cipher_text_16);
+    let mut data_4: Vec<u8> = Vec::new();
+    data_4.extend_from_slice(&cipher_text_4);
+    let mut data_24_internal_key: Vec<u8> = Vec::new();
+    data_24_internal_key.extend_from_slice(&cipher_text_24);
 
     let mut result_tag_64_no_text: bool = false;
     let mut result_tag_64_no_aad: bool = false;
@@ -722,21 +722,18 @@ fn aead_ccm_decrypt_proper_data() {
 
     assert_eq!(result_import_key, expected_result_import_key);
     if chip_is_locked && device.is_aes_enabled() {
-        assert_eq!(result_tag_64_no_text, true);
-        assert_eq!(data_64_no_text.is_empty(), true);
-        assert_eq!(result_tag_64_no_aad, true);
-        assert_eq!(data_64_no_aad.to_vec(), plain_text[..DATA_64_SIZE].to_vec());
-        assert_eq!(result_tag_24, true);
-        assert_eq!(data_24.to_vec(), plain_text[..DATA_24_SIZE].to_vec());
-        assert_eq!(result_tag_16, true);
-        assert_eq!(data_16.to_vec(), plain_text[..DATA_16_SIZE].to_vec());
-        assert_eq!(result_tag_4, true);
-        assert_eq!(data_4.to_vec(), plain_text[..DATA_4_SIZE].to_vec());
-        assert_eq!(result_tag_24_internal_key, true);
-        assert_eq!(
-            data_24_internal_key.to_vec(),
-            plain_text[..DATA_24_SIZE].to_vec()
-        );
+        assert!(result_tag_64_no_text);
+        assert!(data_64_no_text.is_empty());
+        assert!(result_tag_64_no_aad);
+        assert_eq!(data_64_no_aad, plain_text[..DATA_64_SIZE].to_vec());
+        assert!(result_tag_24);
+        assert_eq!(data_24, plain_text[..DATA_24_SIZE].to_vec());
+        assert!(result_tag_16);
+        assert_eq!(data_16, plain_text[..DATA_16_SIZE].to_vec());
+        assert!(result_tag_4);
+        assert_eq!(data_4, plain_text[..DATA_4_SIZE].to_vec());
+        assert!(result_tag_24_internal_key);
+        assert_eq!(data_24_internal_key, plain_text[..DATA_24_SIZE].to_vec());
     }
     assert_eq!(result_64_no_text, expected_64_no_text);
     assert_eq!(result_64_no_aad, expected_64_no_aad);
@@ -759,7 +756,7 @@ fn aead_ccm_decrypt_bad_data() {
 
     let mut chip_is_locked: bool = true;
 
-    let mut data: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+    let mut data: Vec<u8> = vec![0x00; ATCA_AES_DATA_SIZE];
     let param_ok = AeadParam {
         key: Some([0x00; ATCA_AES_KEY_SIZE]),
         nonce: vec![0x00; AES_CCM_IV_MIN_LENGTH],
@@ -944,7 +941,7 @@ fn aead_ccm_decrypt_bad_data() {
     }
 
     // no data to verify sign and decrypt
-    let mut empty_data: [u8; 0] = [];
+    let mut empty_data: Vec<u8> = Vec::new();
     match device.aead_decrypt(
         AeadAlgorithm::Ccm(param_bad_5),
         ATCA_ATECC_SLOTS_COUNT,
@@ -1022,6 +1019,6 @@ fn aead_ccm_decrypt_bad_data() {
     assert_eq!(result_bad_11, expected_bad_11);
     assert_eq!(result_bad_12, expected_bad_12);
     if AtcaStatus::AtcaUnknown == result_bad_12 {
-        assert_eq!(tags_match, false);
+        assert!(!tags_match);
     }
 }

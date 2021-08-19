@@ -81,6 +81,61 @@ impl Default for VerifyEcdsaParam {
     }
 }
 
+/// Cipher operation type
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum CipherOperation {
+    Encrypt,
+    Decrypt,
+}
+
+/// Feedback mode of cipher algorithm
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum FeedbackMode {
+    Cfb,
+    Ofb,
+}
+/// Type of Cipher algorithm
+#[derive(Clone, Debug, PartialEq)]
+pub enum CipherAlgorithm {
+    /// Counter
+    Ctr(CipherParam),
+    /// Cipher Feedback
+    Cfb(CipherParam),
+    /// Output Feedback
+    Ofb(CipherParam),
+    /// XEX-based tweaked-codebook mode with ciphertext stealing
+    Xts(CipherParam),
+    /// Electronic Codebook
+    Ecb(CipherParam),
+    /// Cipher-Block Chaining
+    Cbc(CipherParam),
+    /// Cipher-Block Chaining with PKCS#7 padding
+    CbcPkcs7(CipherParam),
+}
+
+/// Cipher algorithm parameters for compute
+#[derive(Clone, Debug, PartialEq)]
+pub struct CipherParam {
+    /// IV - Initialization Vector.
+    /// For CTR mode it is concatenation of nonce and initial counter value.
+    pub iv: Option<[u8; ATCA_AES_KEY_SIZE]>,
+    /// Size of counter in IV in bytes for CTR mode. 4 bytes is a common size.
+    pub counter_size: Option<u8>,
+    /// external encryption/decryption key needed
+    /// when an AES key stored in the cryptochip is not used
+    pub key: Option<Vec<u8>>,
+}
+
+impl Default for CipherParam {
+    fn default() -> CipherParam {
+        CipherParam {
+            iv: None,
+            counter_size: None,
+            key: None,
+        }
+    }
+}
+
 /// Type of AEAD algorithm
 #[derive(Clone, Debug, PartialEq)]
 pub enum AeadAlgorithm {
@@ -93,7 +148,8 @@ pub enum AeadAlgorithm {
 pub struct AeadParam {
     /// Nonce [number used once aka IV] (default length is 12 bytes)
     pub nonce: Vec<u8>,
-    /// external encryption/decryption key needed when an AES key stored in the cryptochip is not used
+    /// external encryption/decryption key needed
+    /// when an AES key stored in the cryptochip is not used
     pub key: Option<[u8; ATCA_AES_KEY_SIZE]>,
     /// tag to verify authenticity of decrypted data (16 bytes)
     pub tag: Option<Vec<u8>>,

@@ -4,11 +4,16 @@ use std::convert::{From, TryFrom};
 use std::ptr;
 use std::sync::Mutex;
 
+#[cfg(test)]
+use cryptoauthlib_sys::atca_aes_cbc_ctx_t;
+#[cfg(test)]
+use cryptoauthlib_sys::atca_aes_ctr_ctx_t;
+
 use super::{
     AeadAlgorithm, AeadParam, AtcaAesCcmCtx, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper,
     AtcaIfaceType, AtcaSlot, AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions,
-    EccKeyAttr, InfoCmdType, KeyType, NonceTarget, OutputProtectionState, ReadKey, SignMode,
-    SlotConfig, VerifyMode, WriteConfig,
+    CipherAlgorithm, CipherOperation, CipherParam, EccKeyAttr, FeedbackMode, InfoCmdType, KeyType,
+    NonceTarget, OutputProtectionState, ReadKey, SignMode, SlotConfig, VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_AES_GCM_IV_STD_LENGTH, ATCA_AES_KEY_SIZE,
@@ -21,6 +26,7 @@ use super::{
 };
 
 mod aes_ccm;
+mod aes_cipher;
 mod aes_gcm;
 mod c2rust;
 mod rust2c;
@@ -162,13 +168,35 @@ impl AteccDeviceTrait for AteccDevice {
         self.verify_hash(mode, hash, signature)
     } // AteccDevice::verify_hash()
 
+    /// Data encryption function in AES unauthenticated cipher alhorithms modes
+    /// Trait implementation
+    fn cipher_encrypt(
+        &self,
+        algorithm: CipherAlgorithm,
+        slot_id: u8,
+        data: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        self.cipher_encrypt(algorithm, slot_id, data)
+    } // AteccDevice::cipher_encrypt()
+
+    /// Data decryption function in AES unauthenticated cipher alhorithms modes
+    /// Trait implementation
+    fn cipher_decrypt(
+        &self,
+        algorithm: CipherAlgorithm,
+        slot_id: u8,
+        data: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        self.cipher_decrypt(algorithm, slot_id, data)
+    } // AteccDevice::cipher_decrypt()
+
     /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     /// Trait implementation
     fn aead_encrypt(
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<Vec<u8>, AtcaStatus> {
         self.aead_encrypt(algorithm, slot_id, data)
     } // AteccDevice::aead_encrypt()
@@ -179,7 +207,7 @@ impl AteccDeviceTrait for AteccDevice {
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus> {
         self.aead_decrypt(algorithm, slot_id, data)
     } // AteccDevice::aead_decrypt()
@@ -323,6 +351,51 @@ impl AteccDeviceTrait for AteccDevice {
     fn get_access_key(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {
         self.get_access_key(slot_id, key)
     } // AteccDevice::get_access_key()
+    /// Perform an AES-128 encrypt operation with a key in the device
+    /// Trait implementation
+    #[cfg(test)]
+    fn aes_encrypt_block(
+        &self,
+        key_id: u16,
+        key_block: u8,
+        input: &[u8],
+    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
+        self.aes_encrypt_block(key_id, key_block, input)
+    }
+    /// Perform an AES-128 decrypt operation with a key in the device
+    /// Trait implementation
+    #[cfg(test)]
+    fn aes_decrypt_block(
+        &self,
+        key_id: u16,
+        key_block: u8,
+        input: &[u8],
+    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
+        self.aes_decrypt_block(key_id, key_block, input)
+    }
+    /// Initialize context for AES CTR operation with an existing IV
+    /// Trait implementation
+    #[cfg(test)]
+    fn aes_ctr_init(
+        &self,
+        slot_id: u8,
+        counter_size: u8,
+        iv: &[u8],
+    ) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
+        self.aes_ctr_init(slot_id, counter_size, iv)
+    }
+    /// Increments AES CTR counter value
+    /// Trait implementation
+    #[cfg(test)]
+    fn aes_ctr_increment(&self, ctx: atca_aes_ctr_ctx_t) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
+        self.aes_ctr_increment(ctx)
+    }
+    /// Initialize context for AES CBC operation.
+    /// Trait implementation
+    #[cfg(test)]
+    fn aes_cbc_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_cbc_ctx_t, AtcaStatus> {
+        self.aes_cbc_init(slot_id, iv)
+    }
 }
 
 /// Implementation of CryptoAuth Library API Rust wrapper calls
@@ -866,12 +939,84 @@ impl AteccDevice {
         }
     } // AteccDevice::verify_hash()
 
+    /// Data encryption function in AES unauthenticated cipher alhorithms modes
+    fn cipher_encrypt(
+        &self,
+        algorithm: CipherAlgorithm,
+        slot_id: u8,
+        data: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(true) {
+            return AtcaStatus::AtcaNotLocked;
+        }
+        if !self.is_aes_enabled() {
+            // If chip does not support AES hardware encryption, the operation cannot be performed
+            return AtcaStatus::AtcaBadParam;
+        }
+
+        match algorithm {
+            CipherAlgorithm::Ctr(cipher_param) => self.cipher_aes_ctr(cipher_param, slot_id, data),
+            CipherAlgorithm::Cfb(cipher_param) => {
+                self.cipher_aes_cfb(cipher_param, slot_id, data, CipherOperation::Encrypt)
+            }
+            CipherAlgorithm::Ofb(cipher_param) => {
+                self.cipher_aes_ofb(cipher_param, slot_id, data, CipherOperation::Encrypt)
+            }
+            CipherAlgorithm::Ecb(cipher_param) => {
+                self.cipher_aes_ecb(cipher_param, slot_id, data, CipherOperation::Encrypt)
+            }
+            CipherAlgorithm::Cbc(cipher_param) => {
+                self.cipher_aes_cbc(cipher_param, slot_id, data, CipherOperation::Encrypt)
+            }
+            CipherAlgorithm::CbcPkcs7(cipher_param) => {
+                self.cipher_aes_cbc_pkcs7(cipher_param, slot_id, data, CipherOperation::Encrypt)
+            }
+            _ => AtcaStatus::AtcaUnimplemented,
+        }
+    } // AteccDevice::cipher_encrypt()
+
+    /// Data decryption function in AES unauthenticated cipher alhorithms modes
+    fn cipher_decrypt(
+        &self,
+        algorithm: CipherAlgorithm,
+        slot_id: u8,
+        data: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        if self.check_that_configuration_is_not_locked(true) {
+            return AtcaStatus::AtcaNotLocked;
+        }
+        if !self.is_aes_enabled() {
+            // If chip does not support AES hardware encryption, the operation cannot be performed
+            return AtcaStatus::AtcaBadParam;
+        }
+
+        match algorithm {
+            CipherAlgorithm::Ctr(cipher_param) => self.cipher_aes_ctr(cipher_param, slot_id, data),
+            CipherAlgorithm::Cfb(cipher_param) => {
+                self.cipher_aes_cfb(cipher_param, slot_id, data, CipherOperation::Decrypt)
+            }
+            CipherAlgorithm::Ofb(cipher_param) => {
+                self.cipher_aes_ofb(cipher_param, slot_id, data, CipherOperation::Decrypt)
+            }
+            CipherAlgorithm::Ecb(cipher_param) => {
+                self.cipher_aes_ecb(cipher_param, slot_id, data, CipherOperation::Decrypt)
+            }
+            CipherAlgorithm::Cbc(cipher_param) => {
+                self.cipher_aes_cbc(cipher_param, slot_id, data, CipherOperation::Decrypt)
+            }
+            CipherAlgorithm::CbcPkcs7(cipher_param) => {
+                self.cipher_aes_cbc_pkcs7(cipher_param, slot_id, data, CipherOperation::Decrypt)
+            }
+            _ => AtcaStatus::AtcaUnimplemented,
+        }
+    } // AteccDevice::cipher_decrypt()
+
     /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_encrypt(
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<Vec<u8>, AtcaStatus> {
         if self.check_that_configuration_is_not_locked(true) {
             return Err(AtcaStatus::AtcaNotLocked);
@@ -892,7 +1037,7 @@ impl AteccDevice {
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus> {
         if self.check_that_configuration_is_not_locked(true) {
             return Err(AtcaStatus::AtcaNotLocked);
@@ -1379,7 +1524,6 @@ impl AteccDevice {
     } // AteccDevice::read_serial_number()
 
     /// A generic function that reads encrypted data from the chip
-    #[allow(dead_code)]
     fn read_slot_with_encryption(
         &self,
         slot: u16,
