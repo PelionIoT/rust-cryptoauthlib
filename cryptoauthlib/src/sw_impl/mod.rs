@@ -1,7 +1,14 @@
+#[cfg(test)]
+use cryptoauthlib_sys::atca_aes_cbc_ctx_t;
+#[cfg(test)]
+use cryptoauthlib_sys::atca_aes_ctr_ctx_t;
+#[cfg(test)]
+use std::mem::MaybeUninit;
+
 use super::{
     AeadAlgorithm, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus,
-    AteccDeviceTrait, InfoCmdType, KeyType, NonceTarget, OutputProtectionState, SignMode,
-    VerifyMode,
+    AteccDeviceTrait, CipherAlgorithm, InfoCmdType, KeyType, NonceTarget, OutputProtectionState,
+    SignMode, VerifyMode,
 };
 
 use super::{ATCA_AES_DATA_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
@@ -92,12 +99,30 @@ impl AteccDeviceTrait for AteccDevice {
             _ => Err(self.default_dev_status()),
         }
     }
+    /// Data encryption function in AES unauthenticated cipher alhorithms modes
+    fn cipher_encrypt(
+        &self,
+        _algorithm: CipherAlgorithm,
+        _slot_id: u8,
+        _data: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        self.default_dev_status()
+    }
+    /// Data decryption function in AES unauthenticated cipher alhorithms modes
+    fn cipher_decrypt(
+        &self,
+        _algorithm: CipherAlgorithm,
+        _slot_id: u8,
+        _data: &mut Vec<u8>,
+    ) -> AtcaStatus {
+        self.default_dev_status()
+    }
     /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_encrypt(
         &self,
         _algorithm: AeadAlgorithm,
         _slot_id: u8,
-        _data: &mut [u8],
+        _data: &mut Vec<u8>,
     ) -> Result<Vec<u8>, AtcaStatus> {
         match self.dev_type {
             AtcaDeviceType::AtcaTestDevSuccess => Ok(vec![0; ATCA_AES_DATA_SIZE]),
@@ -109,7 +134,7 @@ impl AteccDeviceTrait for AteccDevice {
         &self,
         _algorithm: AeadAlgorithm,
         _slot_id: u8,
-        _data: &mut [u8],
+        _data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus> {
         match self.dev_type {
             AtcaDeviceType::AtcaTestDevSuccess => Ok(true),
@@ -240,6 +265,69 @@ impl AteccDeviceTrait for AteccDevice {
     #[cfg(test)]
     fn get_access_key(&self, _slot_id: u8, _key: &mut Vec<u8>) -> AtcaStatus {
         self.default_dev_status()
+    }
+    #[cfg(test)]
+    fn aes_encrypt_block(
+        &self,
+        _key_id: u16,
+        _key_block: u8,
+        _input: &[u8],
+    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok([0x00; ATCA_AES_DATA_SIZE]),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    #[cfg(test)]
+    fn aes_decrypt_block(
+        &self,
+        _key_id: u16,
+        _key_block: u8,
+        _input: &[u8],
+    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok([0x00; ATCA_AES_DATA_SIZE]),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    #[cfg(test)]
+    fn aes_ctr_init(
+        &self,
+        _slot_id: u8,
+        _counter_size: u8,
+        _iv: &[u8],
+    ) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => {
+                let ctx: atca_aes_ctr_ctx_t = {
+                    let ctx = MaybeUninit::<atca_aes_ctr_ctx_t>::zeroed();
+                    unsafe { ctx.assume_init() }
+                };
+                Ok(ctx)
+            }
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    #[cfg(test)]
+    fn aes_ctr_increment(&self, ctx: atca_aes_ctr_ctx_t) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(ctx),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    /// Initialize context for AES CBC operation.
+    #[cfg(test)]
+    fn aes_cbc_init(&self, _slot_id: u8, _iv: &[u8]) -> Result<atca_aes_cbc_ctx_t, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => {
+                let ctx: atca_aes_cbc_ctx_t = {
+                    let ctx = MaybeUninit::<atca_aes_cbc_ctx_t>::zeroed();
+                    unsafe { ctx.assume_init() }
+                };
+                Ok(ctx)
+            }
+            _ => Err(self.default_dev_status()),
+        }
     }
 }
 

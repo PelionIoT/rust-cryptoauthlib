@@ -7,9 +7,7 @@ use super::{
     ATCA_AES_DATA_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_ATECC_TEMPKEY_KEYID, ATCA_NONCE_SIZE,
 };
 
-use cryptoauthlib_sys::atca_aes_cbc_ctx_t;
 use cryptoauthlib_sys::atca_aes_cmac_ctx_t;
-use cryptoauthlib_sys::atca_aes_ctr_ctx_t;
 
 impl AteccDevice {
     /// function that performs encryption in AES CCM mode
@@ -17,21 +15,21 @@ impl AteccDevice {
         &self,
         aead_param: AeadParam,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<Vec<u8>, AtcaStatus> {
         let mut ctx: AtcaAesCcmCtx = self.common_aes_ccm(aead_param, slot_id, data)?;
         ctx = self.aes_ccm_update(ctx, data, true)?;
 
         let result = self.aes_ccm_finish(ctx)?;
         Ok(result)
-    }
+    } // AteccDevice::encrypt_aes_ccm()
 
     /// function that performs decryption in AES CCM mode
     pub(crate) fn decrypt_aes_ccm(
         &self,
         aead_param: AeadParam,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus> {
         let tag_to_check: Vec<u8>;
 
@@ -46,14 +44,14 @@ impl AteccDevice {
 
         let result = self.aes_ccm_decrypt_finish(ctx, &tag_to_check)?;
         Ok(result)
-    }
+    } // AteccDevice::decrypt_aes_ccm()
 
     /// a helper function implementing common functionality for AES CCM encryption and decryption
     fn common_aes_ccm(
         &self,
         aead_param: AeadParam,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<AtcaAesCcmCtx, AtcaStatus> {
         const MAX_IV_SIZE: usize = 13;
         const MIN_IV_SIZE: usize = 7;
@@ -79,9 +77,9 @@ impl AteccDevice {
                     || (aead_param.tag_length > Some(MAX_TAG_SIZE as u8))
                     || (aead_param.tag_length.unwrap() % 2 != 0)))
             || (aead_param.tag.is_some()
-                && ((aead_param.tag.clone().unwrap().len() < MIN_TAG_SIZE)
-                    || (aead_param.tag.clone().unwrap().len() > MAX_TAG_SIZE)
-                    || (aead_param.tag.clone().unwrap().len() % 2 != 0)))
+                && ((aead_param.tag.as_ref().unwrap().len() < MIN_TAG_SIZE)
+                    || (aead_param.tag.as_ref().unwrap().len() > MAX_TAG_SIZE)
+                    || (aead_param.tag.as_ref().unwrap().len() % 2 != 0)))
         {
             return Err(AtcaStatus::AtcaInvalidSize);
         }
@@ -119,7 +117,7 @@ impl AteccDevice {
         }
 
         Ok(ctx)
-    }
+    } // AteccDevice::common_aes_ccm
 
     /// Initialize context for AES CCM operation with an existing IV, which
     /// is common when starting a decrypt operation
@@ -233,87 +231,14 @@ impl AteccDevice {
         // Increment the counter to skip the first block, first will be later reused to get tag.
         ctx.ctr_ctx = self.aes_ctr_increment(ctx.ctr_ctx)?;
         Ok(ctx)
-    }
-
-    /// Process Additional Authenticated Data (AAD) using CCM mode and a
-    /// key within the ATECC608A device
-    fn aes_ccm_aad_update(
-        &self,
-        ctx: AtcaAesCcmCtx,
-        data: &[u8],
-    ) -> Result<AtcaAesCcmCtx, AtcaStatus> {
-        if data.is_empty() {
-            return Ok(ctx);
-        };
-
-        let mut temp_ctx: AtcaAesCcmCtx = ctx;
-        let copy_size: usize;
-        let mut aad_size: usize = data.len();
-        let rem_size: usize = ATCA_AES_DATA_SIZE - temp_ctx.partial_aad_size;
-        match aad_size > rem_size {
-            true => copy_size = rem_size,
-            false => copy_size = aad_size,
-        }
-
-        // Copy data into current block
-        let start_pos = temp_ctx.partial_aad_size;
-        let end_pos = min(ATCA_AES_DATA_SIZE, start_pos + copy_size);
-        temp_ctx.partial_aad[start_pos..end_pos].clone_from_slice(&data[..copy_size]);
-
-        if temp_ctx.partial_aad_size + aad_size < ATCA_AES_DATA_SIZE {
-            // Not enough data to finish off the current block
-            temp_ctx.partial_aad_size += aad_size;
-            return Ok(temp_ctx);
-        }
-
-        // Process the current block
-        temp_ctx.cbc_mac_ctx =
-            self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &temp_ctx.partial_aad)?;
-
-        // Process any additional blocks
-        aad_size -= copy_size; // Adjust to the remaining aad bytes
-        let block_count = aad_size / ATCA_AES_DATA_SIZE;
-        if block_count > 0 {
-            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(
-                temp_ctx.cbc_mac_ctx,
-                &data[copy_size..((block_count * ATCA_AES_DATA_SIZE) + copy_size)],
-            )?;
-        }
-
-        // Save any remaining data
-        temp_ctx.partial_aad_size = aad_size % ATCA_AES_DATA_SIZE;
-        let start_pos = copy_size + (block_count * ATCA_AES_DATA_SIZE);
-        temp_ctx.partial_aad[..temp_ctx.partial_aad_size]
-            .clone_from_slice(&data[start_pos..(start_pos + temp_ctx.partial_aad_size)]);
-
-        Ok(temp_ctx)
-    }
-
-    /// Finish processing Additional Authenticated Data (AAD) using CCM mode
-    fn aes_ccm_aad_finish(&self, ctx: AtcaAesCcmCtx) -> Result<AtcaAesCcmCtx, AtcaStatus> {
-        // Pad and process any incomplete aad data blocks
-        let mut temp_ctx = ctx;
-
-        if temp_ctx.partial_aad_size > 0 {
-            let mut buffer: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
-            buffer[..temp_ctx.partial_aad_size]
-                .copy_from_slice(&temp_ctx.partial_aad[..temp_ctx.partial_aad_size]);
-
-            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &buffer)?;
-
-            // Reset ctx partial aad size variable
-            temp_ctx.partial_aad_size = 0
-        }
-
-        Ok(temp_ctx)
-    }
+    } // AteccDevice::aes_ccm_init()
 
     /// Process data using CCM mode and a key within the ATECC608A device.
     /// aes_ccm_init() should be called before the first use of this function.
     fn aes_ccm_update(
         &self,
         ctx: AtcaAesCcmCtx,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
         is_encrypt: bool,
     ) -> Result<AtcaAesCcmCtx, AtcaStatus> {
         let mut temp_ctx = ctx;
@@ -366,7 +291,7 @@ impl AteccDevice {
         }
 
         Ok(temp_ctx)
-    }
+    } // AteccDevice::aes_ccm_update()
 
     /// Complete a CCM decrypt operation authenticating provided tag
     #[inline]
@@ -381,7 +306,7 @@ impl AteccDevice {
             true => Ok(true),
             false => Ok(false),
         }
-    }
+    } // AteccDevice::aes_ccm_decrypt_finish()
 
     /// Complete a CCM operation returning the authentication tag
     fn aes_ccm_finish(&self, ctx: AtcaAesCcmCtx) -> Result<Vec<u8>, AtcaStatus> {
@@ -421,107 +346,79 @@ impl AteccDevice {
         tag.shrink_to_fit();
 
         Ok(tag)
-    }
+    } // AteccDevice::aes_ccm_finish()
+
+    /// Process Additional Authenticated Data (AAD) using CCM mode and a
+    /// key within the ATECC608A device
+    fn aes_ccm_aad_update(
+        &self,
+        ctx: AtcaAesCcmCtx,
+        data: &[u8],
+    ) -> Result<AtcaAesCcmCtx, AtcaStatus> {
+        if data.is_empty() {
+            return Ok(ctx);
+        };
+
+        let mut temp_ctx: AtcaAesCcmCtx = ctx;
+        let mut aad_size: usize = data.len();
+        let copy_size: usize = min(aad_size, ATCA_AES_DATA_SIZE - temp_ctx.partial_aad_size);
+
+        // Copy data into current block
+        let start_pos = temp_ctx.partial_aad_size;
+        let end_pos = min(ATCA_AES_DATA_SIZE, start_pos + copy_size);
+        temp_ctx.partial_aad[start_pos..end_pos].clone_from_slice(&data[..copy_size]);
+
+        if temp_ctx.partial_aad_size + aad_size < ATCA_AES_DATA_SIZE {
+            // Not enough data to finish off the current block
+            temp_ctx.partial_aad_size += aad_size;
+            return Ok(temp_ctx);
+        }
+
+        // Process the current block
+        temp_ctx.cbc_mac_ctx =
+            self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &temp_ctx.partial_aad)?;
+
+        // Process any additional blocks
+        aad_size -= copy_size; // Adjust to the remaining aad bytes
+        let block_count = aad_size / ATCA_AES_DATA_SIZE;
+        if block_count > 0 {
+            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(
+                temp_ctx.cbc_mac_ctx,
+                &data[copy_size..((block_count * ATCA_AES_DATA_SIZE) + copy_size)],
+            )?;
+        }
+
+        // Save any remaining data
+        temp_ctx.partial_aad_size = aad_size % ATCA_AES_DATA_SIZE;
+        let start_pos = copy_size + (block_count * ATCA_AES_DATA_SIZE);
+        temp_ctx.partial_aad[..temp_ctx.partial_aad_size]
+            .clone_from_slice(&data[start_pos..(start_pos + temp_ctx.partial_aad_size)]);
+
+        Ok(temp_ctx)
+    } // AteccDevice::aes_ccm_aad_update()
+
+    /// Finish processing Additional Authenticated Data (AAD) using CCM mode
+    fn aes_ccm_aad_finish(&self, ctx: AtcaAesCcmCtx) -> Result<AtcaAesCcmCtx, AtcaStatus> {
+        // Pad and process any incomplete aad data blocks
+        let mut temp_ctx = ctx;
+
+        if temp_ctx.partial_aad_size > 0 {
+            let mut buffer: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
+            buffer[..temp_ctx.partial_aad_size]
+                .copy_from_slice(&temp_ctx.partial_aad[..temp_ctx.partial_aad_size]);
+
+            temp_ctx.cbc_mac_ctx = self.aes_cbcmac_update(temp_ctx.cbc_mac_ctx, &buffer)?;
+
+            // Reset ctx partial aad size variable
+            temp_ctx.partial_aad_size = 0
+        }
+
+        Ok(temp_ctx)
+    } // AteccDevice::aes_ccm_aad_finish()
 
     // -----------------------------------------------------------
     // Auxiliary functions
     // -----------------------------------------------------------
-
-    /// Initialize context for AES CTR operation with an existing IV, which
-    /// is common when start a decrypt operation
-    fn aes_ctr_init(
-        &self,
-        slot_id: u8,
-        counter_size: u8,
-        iv: &[u8],
-    ) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
-        const BLOCK_IDX: u8 = 0;
-
-        if iv.len() != ATCA_AES_DATA_SIZE {
-            return Err(AtcaStatus::AtcaInvalidSize);
-        }
-        let mut slot = slot_id as u16;
-        if slot_id == ATCA_ATECC_SLOTS_COUNT {
-            slot = ATCA_ATECC_TEMPKEY_KEYID;
-        }
-
-        let ctx: atca_aes_ctr_ctx_t = {
-            let ctx = MaybeUninit::<atca_aes_ctr_ctx_t>::zeroed();
-            unsafe { ctx.assume_init() }
-        };
-        let ctx_ptr = Box::into_raw(Box::new(ctx));
-
-        let result = AtcaStatus::from(unsafe {
-            let _guard = self
-                .api_mutex
-                .lock()
-                .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_aes_ctr_init(
-                ctx_ptr,
-                slot,
-                BLOCK_IDX,
-                counter_size,
-                iv.as_ptr(),
-            )
-        });
-
-        match result {
-            AtcaStatus::AtcaSuccess => Ok({
-                let result = unsafe { *ctx_ptr };
-                unsafe { Box::from_raw(ctx_ptr) };
-                result
-            }),
-            _ => Err(result),
-        }
-    }
-
-    /// Increments AES CTR counter value
-    fn aes_ctr_increment(&self, ctx: atca_aes_ctr_ctx_t) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
-        let ctx_ptr = Box::into_raw(Box::new(ctx));
-
-        let result = AtcaStatus::from(unsafe {
-            let _guard = self
-                .api_mutex
-                .lock()
-                .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_aes_ctr_increment(ctx_ptr)
-        });
-
-        let ctx = unsafe { *ctx_ptr };
-        unsafe { Box::from_raw(ctx_ptr) };
-
-        match result {
-            AtcaStatus::AtcaSuccess => Ok(ctx),
-            _ => Err(result),
-        }
-    }
-
-    /// Process a block of data using CTR mode and a key within the device.
-    /// aes_ctr_init() should be called before the first use of this function.
-    fn aes_ctr_block(
-        &self,
-        ctx: atca_aes_ctr_ctx_t,
-        input: &[u8],
-        output: &mut [u8],
-    ) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
-        let ctx_ptr = Box::into_raw(Box::new(ctx));
-
-        let result = AtcaStatus::from(unsafe {
-            let _guard = self
-                .api_mutex
-                .lock()
-                .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_aes_ctr_block(ctx_ptr, input.as_ptr(), output.as_mut_ptr())
-        });
-
-        let ctx = unsafe { *ctx_ptr };
-        unsafe { Box::from_raw(ctx_ptr) };
-
-        match result {
-            AtcaStatus::AtcaSuccess => Ok(ctx),
-            _ => Err(result),
-        }
-    }
 
     /// Initialize context for AES CBC-MAC operation
     fn aes_cbcmac_init(&self, slot_id: u8) -> atca_aes_cmac_ctx_t {
@@ -539,7 +436,7 @@ impl AteccDevice {
         ctx.cbc_ctx.key_block = 0x00;
 
         ctx
-    }
+    } // AteccDevice::aes_cbcmac_init()
 
     /// Calculate AES CBC-MAC with key stored within ECC608A device.
     /// aes_cbcmac_init() should be called before the first use of this function.
@@ -556,17 +453,18 @@ impl AteccDevice {
         // Process full blocks of data with AES-CBC
         let mut temp_ctx = ctx;
         let mut idx: usize = 0;
+        let mut buffer: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
 
         for i in 0..(data.len() / ATCA_AES_DATA_SIZE) {
             let start_pos = i * ATCA_AES_DATA_SIZE;
             let end_pos = start_pos + ATCA_AES_DATA_SIZE;
             idx += 1;
 
-            let val = self.aes_cbc_encrypt_block(temp_ctx.cbc_ctx, &data[start_pos..end_pos])?;
-            match val.len() {
-                ATCA_AES_DATA_SIZE => temp_ctx.cbc_ctx.ciphertext.copy_from_slice(&val), // Save copy of ciphertext for next block operation
-                _ => return Err(AtcaStatus::AtcaFuncFail),
-            }
+            temp_ctx.cbc_ctx = self.aes_cbc_encrypt_block(
+                temp_ctx.cbc_ctx,
+                &data[start_pos..end_pos],
+                &mut buffer,
+            )?;
         }
 
         // Store incomplete block to context structure
@@ -581,7 +479,7 @@ impl AteccDevice {
         }
 
         Ok(temp_ctx)
-    }
+    } // AteccDevice::aes_cbcmac_update()
 
     /// Finish a CBC-MAC operation returning the CBC-MAC value. If the data
     /// provided to the aes_cbcmac_update() function has incomplete
@@ -606,61 +504,5 @@ impl AteccDevice {
         tag.resize(tag_size, 0x00);
         tag.shrink_to_fit();
         Ok(tag)
-    }
-
-    /// Encrypt a block of data using CBC mode and a key within the device.
-    fn aes_cbc_encrypt_block(
-        &self,
-        ctx: atca_aes_cbc_ctx_t,
-        data: &[u8],
-    ) -> Result<Vec<u8>, AtcaStatus> {
-        if data.is_empty() {
-            return Err(AtcaStatus::AtcaBadParam);
-        }
-        if data.len() != ATCA_AES_DATA_SIZE {
-            return Err(AtcaStatus::AtcaInvalidSize);
-        }
-
-        let mut input: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
-        // XOR plaintext with previous block's ciphertext to get input value to block encrypt
-        for i in 0..ATCA_AES_DATA_SIZE {
-            input[i] = data[i] ^ ctx.ciphertext[i];
-        }
-
-        // Block encrypt of input data
-        let val = self.aes_encrypt_block(ctx.key_id, ctx.key_block, &input)?;
-        Ok(val.to_vec())
-    }
-
-    /// Perform an AES-128 encrypt operation with a key in the device
-    fn aes_encrypt_block(
-        &self,
-        key_id: u16,
-        key_block: u8,
-        input: &[u8],
-    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
-        if input.len() != ATCA_AES_DATA_SIZE {
-            return Err(AtcaStatus::AtcaInvalidSize);
-        }
-
-        let mut ciphertext: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
-
-        let result = AtcaStatus::from(unsafe {
-            let _guard = self
-                .api_mutex
-                .lock()
-                .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_aes_encrypt(
-                key_id,
-                key_block,
-                input.as_ptr(),
-                ciphertext.as_mut_ptr(),
-            )
-        });
-
-        match result {
-            AtcaStatus::AtcaSuccess => Ok(ciphertext),
-            _ => Err(result),
-        }
-    }
+    } // AteccDevice::aes_cbcmac_finish()
 }

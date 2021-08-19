@@ -75,7 +75,7 @@ fn iface_setup(config_file: String) -> Result<AtcaIfaceCfg, String> {
 /// Setup tests.
 pub(crate) fn test_setup() -> AteccDevice {
     let result_iface_cfg = iface_setup("config.toml".to_owned());
-    assert_eq!(result_iface_cfg.is_ok(), true);
+    assert!(result_iface_cfg.is_ok());
 
     let iface_cfg = result_iface_cfg.unwrap();
     assert_eq!(iface_cfg.iface_type.to_string(), "AtcaI2cIface");

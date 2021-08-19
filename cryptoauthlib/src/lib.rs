@@ -14,6 +14,9 @@ mod sw_impl;
 #[cfg(test)]
 mod unit_tests;
 
+#[cfg(test)]
+use cryptoauthlib_sys::atca_aes_cbc_ctx_t;
+
 pub trait AteccDeviceTrait {
     /// Request ATECC to generate a vector of random bytes
     fn random(&self, rand_out: &mut Vec<u8>) -> AtcaStatus;
@@ -49,19 +52,33 @@ pub trait AteccDeviceTrait {
         hash: &[u8],
         signature: &[u8],
     ) -> Result<bool, AtcaStatus>;
+    /// Data encryption function in AES unauthenticated cipher alhorithms modes
+    fn cipher_encrypt(
+        &self,
+        algorithm: CipherAlgorithm,
+        slot_id: u8,
+        data: &mut Vec<u8>,
+    ) -> AtcaStatus;
+    /// Data decryption function in AES unauthenticated cipher alhorithms modes
+    fn cipher_decrypt(
+        &self,
+        algorithm: CipherAlgorithm,
+        slot_id: u8,
+        data: &mut Vec<u8>,
+    ) -> AtcaStatus;
     /// Data encryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_encrypt(
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<Vec<u8>, AtcaStatus>;
     /// Data decryption function in AES AEAD (authenticated encryption with associated data) modes
     fn aead_decrypt(
         &self,
         algorithm: AeadAlgorithm,
         slot_id: u8,
-        data: &mut [u8],
+        data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus>;
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType;
@@ -134,6 +151,37 @@ pub trait AteccDeviceTrait {
     /// Data is not taken directly from the ATECCx08 chip, but from the AteccDevice structure
     #[cfg(test)]
     fn get_access_key(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus;
+    /// Perform an AES-128 encrypt operation with a key in the device
+    #[cfg(test)]
+    fn aes_encrypt_block(
+        &self,
+        key_id: u16,
+        key_block: u8,
+        input: &[u8],
+    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus>;
+    /// Perform an AES-128 decrypt operation with a key in the device
+    #[cfg(test)]
+    fn aes_decrypt_block(
+        &self,
+        key_id: u16,
+        key_block: u8,
+        input: &[u8],
+    ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus>;
+    /// Initialize context for AES CTR operation with an existing IV, which
+    /// is common when start a decrypt operation
+    #[cfg(test)]
+    fn aes_ctr_init(
+        &self,
+        slot_id: u8,
+        counter_size: u8,
+        iv: &[u8],
+    ) -> Result<atca_aes_ctr_ctx_t, AtcaStatus>;
+    /// Increments AES CTR counter value
+    #[cfg(test)]
+    fn aes_ctr_increment(&self, ctx: atca_aes_ctr_ctx_t) -> Result<atca_aes_ctr_ctx_t, AtcaStatus>;
+    /// Initialize context for AES CBC operation.
+    #[cfg(test)]
+    fn aes_cbc_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_cbc_ctx_t, AtcaStatus>;
 }
 
 pub type AteccDevice = Box<dyn AteccDeviceTrait + Send + Sync>;

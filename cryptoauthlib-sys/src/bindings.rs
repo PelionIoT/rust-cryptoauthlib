@@ -240,6 +240,7 @@ pub struct max_align_t {
     pub __bindgen_padding_0: u64,
     pub __clang_max_align_nonce2: u128,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_max_align_t() {
     assert_eq!(
@@ -381,6 +382,7 @@ pub struct __locale_struct {
     pub __ctype_toupper: *const ::std::os::raw::c_int,
     pub __names: [*const ::std::os::raw::c_char; 13usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout___locale_struct() {
     assert_eq!(
@@ -684,6 +686,7 @@ pub type __pid_t = ::std::os::raw::c_int;
 pub struct __fsid_t {
     pub __val: [::std::os::raw::c_int; 2usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout___fsid_t() {
     assert_eq!(
@@ -841,6 +844,7 @@ pub struct atca_command {
     pub clock_divider: u8,
     pub execution_time_msec: u16,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_command() {
     assert_eq!(
@@ -907,6 +911,7 @@ pub struct ATCAPacket {
     pub data: [u8; 192usize],
     pub execTime: u8,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAPacket() {
     assert_eq!(
@@ -1127,6 +1132,7 @@ pub struct ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_1 {
     pub bus: u8,
     pub baud: u32,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_1() {
     assert_eq!(
@@ -1190,6 +1196,7 @@ fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_1() {
 pub struct ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_2 {
     pub bus: u8,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_2() {
     assert_eq!(
@@ -1231,6 +1238,7 @@ pub struct ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_3 {
     pub parity: u8,
     pub stopbits: u8,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_3() {
     assert_eq!(
@@ -1325,6 +1333,7 @@ pub struct ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_4 {
     pub pid: u32,
     pub packetsize: u32,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_4() {
     assert_eq!(
@@ -1461,6 +1470,7 @@ pub struct ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_5 {
         unsafe extern "C" fn(hal_data: *mut ::std::os::raw::c_void) -> ATCA_STATUS,
     >,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_5() {
     assert_eq!(
@@ -1584,6 +1594,7 @@ fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_5() {
         )
     );
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1() {
     assert_eq!(
@@ -1657,6 +1668,7 @@ fn bindgen_test_layout_ATCAIfaceCfg__bindgen_ty_1() {
         )
     );
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAIfaceCfg() {
     assert_eq!(
@@ -1750,6 +1762,7 @@ pub struct atca_iface {
     pub atsleep: ::std::option::Option<unsafe extern "C" fn(hal: ATCAIface) -> ATCA_STATUS>,
     pub hal_data: *mut ::std::os::raw::c_void,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_iface() {
     assert_eq!(
@@ -1937,6 +1950,7 @@ pub struct ATCAHAL_t {
     >,
     pub hal_data: *mut ::std::os::raw::c_void,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_ATCAHAL_t() {
     assert_eq!(
@@ -2136,6 +2150,7 @@ pub struct atca_device {
     #[doc = "!< Physical interface"]
     pub mIface: ATCAIface,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_device() {
     assert_eq!(
@@ -2218,6 +2233,7 @@ pub struct atcac_sha2_256_ctx {
     #[doc = "!< Filler value to make sure the actual implementation has enough room to store its context. uint32_t is used to remove some alignment warnings."]
     pub pad: [u32; 48usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atcac_sha2_256_ctx() {
     assert_eq!(
@@ -2347,6 +2363,7 @@ pub struct atca_aes_gcm_ctx {
     #[doc = "!< Last ciphertext block"]
     pub ciphertext_block: [u8; 16usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_aes_gcm_ctx() {
     assert_eq!(
@@ -2575,6 +2592,7 @@ pub struct atca_aes_cbc_ctx {
     #[doc = "!< Ciphertext from last operation."]
     pub ciphertext: [u8; 16usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_aes_cbc_ctx() {
     assert_eq!(
@@ -2651,6 +2669,7 @@ pub struct atca_aes_cmac_ctx {
     #[doc = "!< Unprocessed message storage."]
     pub block: [u8; 16usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_aes_cmac_ctx() {
     assert_eq!(
@@ -2728,6 +2747,7 @@ pub struct atca_aes_ctr_ctx {
     #[doc = "!< Size of counter in the initialization vector."]
     pub counter_size: u8,
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_aes_ctr_ctx() {
     assert_eq!(
@@ -3070,6 +3090,7 @@ pub struct atca_sha256_ctx {
     #[doc = "!< Unprocessed message storage"]
     pub block: [u8; 128usize],
 }
+#[allow(deref_nullptr)]
 #[test]
 fn bindgen_test_layout_atca_sha256_ctx() {
     assert_eq!(
