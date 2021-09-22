@@ -1,13 +1,10 @@
 use std::cmp::min;
-use std::mem::MaybeUninit;
 
 use super::{AeadParam, AtcaAesCcmCtx, AtcaStatus, AteccDevice, KeyType, NonceTarget};
 
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_ATECC_TEMPKEY_KEYID, ATCA_NONCE_SIZE,
 };
-
-use cryptoauthlib_sys::atca_aes_cmac_ctx_t;
 
 impl AteccDevice {
     /// function that performs encryption in AES CCM mode
@@ -113,7 +110,7 @@ impl AteccDevice {
             self.aes_ccm_init(slot_id, &iv, additional_data_size, data_size, tag_length)?;
 
         if let Some(data_to_sign) = &aead_param.additional_data {
-            ctx = self.aes_ccm_aad_update(ctx, &data_to_sign)?;
+            ctx = self.aes_ccm_aad_update(ctx, data_to_sign)?;
         }
 
         Ok(ctx)
@@ -176,7 +173,7 @@ impl AteccDevice {
         //   -----------------------
 
         // Copying the IV into the nonce field.
-        b[1..=iv.len()].clone_from_slice(&iv);
+        b[1..=iv.len()].clone_from_slice(iv);
 
         // Update length field in B0 block.
         let mut size_left: usize = text_size;
@@ -221,7 +218,7 @@ impl AteccDevice {
         //   16-L ... 15    Counter i
         //   -----------------------
         // Formatting to get the initial counter value
-        counter[1..=iv.len()].clone_from_slice(&iv);
+        counter[1..=iv.len()].clone_from_slice(iv);
         ctx.counter[..].copy_from_slice(&counter);
 
         // Init CTR mode context with the counter value obtained from previous step.
@@ -415,94 +412,4 @@ impl AteccDevice {
 
         Ok(temp_ctx)
     } // AteccDevice::aes_ccm_aad_finish()
-
-    // -----------------------------------------------------------
-    // Auxiliary functions
-    // -----------------------------------------------------------
-
-    /// Initialize context for AES CBC-MAC operation
-    fn aes_cbcmac_init(&self, slot_id: u8) -> atca_aes_cmac_ctx_t {
-        let mut slot = slot_id as u16;
-        if slot_id == ATCA_ATECC_SLOTS_COUNT {
-            slot = ATCA_ATECC_TEMPKEY_KEYID;
-        }
-
-        let mut ctx: atca_aes_cmac_ctx_t = {
-            let ctx = MaybeUninit::<atca_aes_cmac_ctx_t>::zeroed();
-            unsafe { ctx.assume_init() }
-        };
-
-        ctx.cbc_ctx.key_id = slot;
-        ctx.cbc_ctx.key_block = 0x00;
-
-        ctx
-    } // AteccDevice::aes_cbcmac_init()
-
-    /// Calculate AES CBC-MAC with key stored within ECC608A device.
-    /// aes_cbcmac_init() should be called before the first use of this function.
-    fn aes_cbcmac_update(
-        &self,
-        ctx: atca_aes_cmac_ctx_t,
-        data: &[u8],
-    ) -> Result<atca_aes_cmac_ctx_t, AtcaStatus> {
-        if data.is_empty() {
-            // Nothing to do
-            return Ok(ctx);
-        }
-
-        // Process full blocks of data with AES-CBC
-        let mut temp_ctx = ctx;
-        let mut idx: usize = 0;
-        let mut buffer: [u8; ATCA_AES_DATA_SIZE] = [0x00; ATCA_AES_DATA_SIZE];
-
-        for i in 0..(data.len() / ATCA_AES_DATA_SIZE) {
-            let start_pos = i * ATCA_AES_DATA_SIZE;
-            let end_pos = start_pos + ATCA_AES_DATA_SIZE;
-            idx += 1;
-
-            temp_ctx.cbc_ctx = self.aes_cbc_encrypt_block(
-                temp_ctx.cbc_ctx,
-                &data[start_pos..end_pos],
-                &mut buffer,
-            )?;
-        }
-
-        // Store incomplete block to context structure
-        let start_pos = idx * ATCA_AES_DATA_SIZE;
-        match start_pos < data.len() {
-            true => {
-                temp_ctx.block_size = (data.len() - start_pos) as u32;
-                temp_ctx.block[..(temp_ctx.block_size as usize)]
-                    .copy_from_slice(&data[start_pos..(start_pos + temp_ctx.block_size as usize)]);
-            }
-            false => temp_ctx.block_size = 0,
-        }
-
-        Ok(temp_ctx)
-    } // AteccDevice::aes_cbcmac_update()
-
-    /// Finish a CBC-MAC operation returning the CBC-MAC value. If the data
-    /// provided to the aes_cbcmac_update() function has incomplete
-    /// block this function will return an error code
-    fn aes_cbcmac_finish(
-        &self,
-        ctx: atca_aes_cmac_ctx_t,
-        tag_size: usize,
-    ) -> Result<Vec<u8>, AtcaStatus> {
-        let mut tag: Vec<u8> = vec![0x00; ATCA_AES_DATA_SIZE];
-        if tag_size > ATCA_AES_DATA_SIZE {
-            return Err(AtcaStatus::AtcaBadParam);
-        }
-
-        // Check for incomplete data block
-        if ctx.block_size != 0 {
-            return Err(AtcaStatus::AtcaInvalidSize); // Returns INVALID_SIZE if incomplete blocks are present
-        }
-
-        // All processing is already done, copying the mac to result buffer
-        tag[..tag_size].copy_from_slice(&ctx.cbc_ctx.ciphertext[..tag_size]);
-        tag.resize(tag_size, 0x00);
-        tag.shrink_to_fit();
-        Ok(tag)
-    } // AteccDevice::aes_cbcmac_finish()
 }

@@ -1,6 +1,8 @@
 use std::cell::RefCell;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::convert::{From, TryFrom};
+use std::mem::discriminant;
 use std::ptr;
 use std::sync::Mutex;
 
@@ -13,7 +15,8 @@ use super::{
     AeadAlgorithm, AeadParam, AtcaAesCcmCtx, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper,
     AtcaIfaceType, AtcaSlot, AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions,
     CipherAlgorithm, CipherOperation, CipherParam, EccKeyAttr, FeedbackMode, InfoCmdType, KeyType,
-    NonceTarget, OutputProtectionState, ReadKey, SignMode, SlotConfig, VerifyMode, WriteConfig,
+    MacAlgorithm, MacParam, NonceTarget, OutputProtectionState, ReadKey, SignMode, SlotConfig,
+    VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_AES_GCM_IV_STD_LENGTH, ATCA_AES_KEY_SIZE,
@@ -22,13 +25,14 @@ use super::{
     ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE, ATCA_KEY_SIZE, ATCA_LOCK_ZONE_CONFIG,
     ATCA_LOCK_ZONE_DATA, ATCA_NONCE_NUMIN_SIZE, ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE,
     ATCA_SERIAL_NUM_SIZE, ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG,
-    ATCA_ZONE_DATA,
+    ATCA_ZONE_DATA, SHA_MODE_TARGET_TEMPKEY,
 };
 
 mod aes_ccm;
 mod aes_cipher;
 mod aes_gcm;
 mod c2rust;
+mod mac;
 mod rust2c;
 
 struct AteccResourceManager {
@@ -212,6 +216,28 @@ impl AteccDeviceTrait for AteccDevice {
         self.aead_decrypt(algorithm, slot_id, data)
     } // AteccDevice::aead_decrypt()
 
+    /// A function that calculates the MAC (Message Authentication Code) value for a message
+    /// Trait implementation
+    fn mac_compute(
+        &self,
+        algorithm: MacAlgorithm,
+        slot_id: u8,
+        data: &[u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        self.mac_compute(algorithm, slot_id, data)
+    } // AteccDevice::mac_compute()
+
+    /// A function that verifies the value of MAC (Message Authentication Code) for a message
+    /// Trait implementation
+    fn mac_verify(
+        &self,
+        algorithm: MacAlgorithm,
+        slot_id: u8,
+        data: &[u8],
+    ) -> Result<bool, AtcaStatus> {
+        self.mac_verify(algorithm, slot_id, data)
+    } // AteccDevice::mac_verify()
+
     /// Request ATECC to return own device type
     /// Trait implementation
     fn get_device_type(&self) -> AtcaDeviceType {
@@ -316,17 +342,10 @@ impl AteccDeviceTrait for AteccDevice {
     /// A generic function that reads data from the chip
     /// Trait implementation
     #[cfg(test)]
-    fn read_zone(
-        &self,
-        zone: u8,
-        slot: u16,
-        block: u8,
-        offset: u8,
-        data: &mut Vec<u8>,
-        len: u8,
-    ) -> AtcaStatus {
-        self.read_zone(zone, slot, block, offset, data, len)
+    fn read_zone(&self, zone: u8, slot: u16, block: u8, offset: u8, data: &mut [u8]) -> AtcaStatus {
+        self.read_zone(zone, slot, block, offset, data)
     } // AteccDevice::read_zone()
+
     /// Request ATECC to read and return own configuration zone.
     /// Note: this function returns raw data, function get_config(..) implements a more
     /// structured return.
@@ -343,6 +362,7 @@ impl AteccDeviceTrait for AteccDevice {
     fn cmp_config_zone(&self, config_data: &mut [u8]) -> Result<bool, AtcaStatus> {
         self.cmp_config_zone(config_data)
     } // AteccDevice::cmp_config_zone()
+
     /// A function that takes an encryption key for securely reading or writing data
     /// that is located in a specific slot on an ATECCx08 chip.
     /// Data is not taken directly from the ATECCx08 chip, but from the AteccDevice structure
@@ -351,6 +371,7 @@ impl AteccDeviceTrait for AteccDevice {
     fn get_access_key(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {
         self.get_access_key(slot_id, key)
     } // AteccDevice::get_access_key()
+
     /// Perform an AES-128 encrypt operation with a key in the device
     /// Trait implementation
     #[cfg(test)]
@@ -361,7 +382,8 @@ impl AteccDeviceTrait for AteccDevice {
         input: &[u8],
     ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
         self.aes_encrypt_block(key_id, key_block, input)
-    }
+    } // AteccDevice::aes_encrypt_block()
+
     /// Perform an AES-128 decrypt operation with a key in the device
     /// Trait implementation
     #[cfg(test)]
@@ -372,7 +394,8 @@ impl AteccDeviceTrait for AteccDevice {
         input: &[u8],
     ) -> Result<[u8; ATCA_AES_DATA_SIZE], AtcaStatus> {
         self.aes_decrypt_block(key_id, key_block, input)
-    }
+    } // AteccDevice::aes_decrypt_block()
+
     /// Initialize context for AES CTR operation with an existing IV
     /// Trait implementation
     #[cfg(test)]
@@ -383,19 +406,21 @@ impl AteccDeviceTrait for AteccDevice {
         iv: &[u8],
     ) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
         self.aes_ctr_init(slot_id, counter_size, iv)
-    }
+    } // AteccDevice::aes_ctr_init()
+
     /// Increments AES CTR counter value
     /// Trait implementation
     #[cfg(test)]
     fn aes_ctr_increment(&self, ctx: atca_aes_ctr_ctx_t) -> Result<atca_aes_ctr_ctx_t, AtcaStatus> {
         self.aes_ctr_increment(ctx)
-    }
+    } // AteccDevice::aes_ctr_increment()
+
     /// Initialize context for AES CBC operation.
     /// Trait implementation
     #[cfg(test)]
     fn aes_cbc_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_cbc_ctx_t, AtcaStatus> {
         self.aes_cbc_init(slot_id, iv)
-    }
+    } // AteccDevice::aes_cbc_init()
 }
 
 /// Implementation of CryptoAuth Library API Rust wrapper calls
@@ -634,37 +659,21 @@ impl AteccDevice {
                 })
             }
             KeyType::Aes => {
+                const BLOCK_IDX: u8 = 0;
+
                 let mut key: Vec<u8> = Vec::with_capacity(ATCA_RANDOM_BUFFER_SIZE);
                 let result = self.random(&mut key);
-                if AtcaStatus::AtcaSuccess != self.random(&mut key) {
+                if AtcaStatus::AtcaSuccess != result {
                     return result;
                 }
-                if key.len() > ATCA_AES_KEY_SIZE {
-                    key.truncate(ATCA_AES_KEY_SIZE);
+
+                for idx in &mut key[ATCA_AES_KEY_SIZE..] {
+                    *idx = 0x00
                 }
-                if key.len() < ATCA_BLOCK_SIZE {
-                    key.resize(ATCA_BLOCK_SIZE, 0);
-                }
-                if slot != ATCA_ATECC_TEMPKEY_KEYID {
-                    const BLOCK_IDX: u8 = 0;
-                    const OFFSET: u8 = 0;
-                    match self.slots[slot_id as usize].config.write_config {
-                        WriteConfig::Always => self.write_zone(
-                            ATCA_ZONE_DATA,
-                            slot,
-                            BLOCK_IDX,
-                            OFFSET,
-                            &mut key,
-                            ATCA_BLOCK_SIZE as u8,
-                        ),
-                        WriteConfig::Encrypt => {
-                            let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
-                            self.write_slot_with_encryption(slot, BLOCK_IDX, &key, &num_in)
-                        }
-                        _ => AtcaStatus::AtcaBadParam,
-                    }
-                } else {
-                    AtcaStatus::AtcaUnimplemented // TODO
+
+                match slot {
+                    ATCA_ATECC_TEMPKEY_KEYID => AtcaStatus::AtcaUnimplemented, // TODO
+                    _ => self.write_slot(slot, BLOCK_IDX, &key),
                 }
             }
             _ => AtcaStatus::AtcaBadParam,
@@ -680,95 +689,15 @@ impl AteccDevice {
             return err;
         }
 
-        if ((key_type == KeyType::Aes) && (key_data.len() != ATCA_AES_KEY_SIZE))
-            || ((key_type == KeyType::P256EccKey)
-                && !((key_data.len() == ATCA_ATECC_PRIV_KEY_SIZE)
-                    || (key_data.len() == ATCA_ATECC_PUB_KEY_SIZE)))
-        {
-            return AtcaStatus::AtcaInvalidSize;
-        }
-
         let slot = match slot_id {
             ATCA_ATECC_SLOTS_COUNT => ATCA_ATECC_TEMPKEY_KEYID,
             _ => slot_id as u16,
         };
 
         match key_type {
-            KeyType::P256EccKey => match key_data.len() {
-                ATCA_ATECC_PUB_KEY_SIZE => {
-                    if slot_id < ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY {
-                        return AtcaStatus::AtcaInvalidId;
-                    }
-
-                    AtcaStatus::from(unsafe {
-                        let _guard = self
-                            .api_mutex
-                            .lock()
-                            .expect("Could not lock atcab API mutex");
-                        cryptoauthlib_sys::atcab_write_pubkey(slot, key_data.as_ptr())
-                    })
-                }
-                _ => {
-                    let mut temp_key: Vec<u8> = vec![0; 4];
-                    temp_key.extend_from_slice(key_data);
-
-                    if let Some(write_key_idx) = self.get_write_key_idx(slot_id as u8) {
-                        let mut write_key = vec![0; ATCA_KEY_SIZE];
-                        let result = self.get_access_key(write_key_idx, &mut write_key);
-
-                        if AtcaStatus::AtcaSuccess == result {
-                            let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] =
-                                [0; ATCA_NONCE_NUMIN_SIZE];
-
-                            AtcaStatus::from(unsafe {
-                                let _guard = self
-                                    .api_mutex
-                                    .lock()
-                                    .expect("Could not lock atcab API mutex");
-                                cryptoauthlib_sys::atcab_priv_write(
-                                    slot,
-                                    temp_key.as_ptr(),
-                                    write_key_idx as u16,
-                                    write_key.as_ptr(),
-                                    num_in.as_mut_ptr(),
-                                )
-                            })
-                        } else {
-                            result
-                        }
-                    } else {
-                        AtcaStatus::AtcaBadParam
-                    }
-                }
-            },
-            KeyType::Aes => {
-                let mut temp_key: Vec<u8> = key_data.to_vec();
-                temp_key.resize(ATCA_BLOCK_SIZE, 0);
-
-                if slot != ATCA_ATECC_TEMPKEY_KEYID {
-                    const BLOCK_IDX: u8 = 0;
-                    const OFFSET: u8 = 0;
-
-                    match self.slots[slot as usize].config.write_config {
-                        WriteConfig::Always => self.write_zone(
-                            ATCA_ZONE_DATA,
-                            slot,
-                            BLOCK_IDX,
-                            OFFSET,
-                            &mut temp_key,
-                            ATCA_BLOCK_SIZE as u8,
-                        ),
-                        WriteConfig::Encrypt => {
-                            let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
-                            self.write_slot_with_encryption(slot, BLOCK_IDX, &temp_key, &num_in)
-                        }
-                        _ => AtcaStatus::AtcaBadParam,
-                    }
-                } else {
-                    self.nonce(NonceTarget::TempKey, &temp_key)
-                }
-            }
-            KeyType::ShaOrText => AtcaStatus::AtcaUnimplemented,
+            KeyType::P256EccKey => self.write_p256_ecc_key_to_slot(key_data, slot),
+            KeyType::Aes => self.write_aes_key_to_slot(key_data, slot),
+            KeyType::ShaOrText => self.write_sha_or_text_key_to_slot(key_data, slot),
             _ => AtcaStatus::AtcaBadParam,
         }
     } // AteccDevice::import_key()
@@ -1053,6 +982,58 @@ impl AteccDevice {
         }
     } // AteccDevice::aead_decrypt()
 
+    /// A function that calculates the MAC (Message Authentication Code) value for a message
+    fn mac_compute(
+        &self,
+        algorithm: MacAlgorithm,
+        slot_id: u8,
+        data: &[u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        if self.check_that_configuration_is_not_locked(true) {
+            return Err(AtcaStatus::AtcaNotLocked);
+        }
+        if (discriminant(&algorithm) != discriminant(&MacAlgorithm::HmacSha256(Default::default())))
+            && !self.is_aes_enabled()
+        {
+            // If chip does not support AES hardware encryption, an operation other than HmacSha256 cannot be performed
+            return Err(AtcaStatus::AtcaBadParam);
+        }
+
+        match algorithm {
+            MacAlgorithm::HmacSha256(mac_param) => {
+                self.compute_mac_hmac_sha256(mac_param, slot_id, data)
+            }
+            MacAlgorithm::Cbcmac(mac_param) => self.compute_mac_cbcmac(mac_param, slot_id, data),
+            MacAlgorithm::Cmac(mac_param) => self.compute_mac_cmac(mac_param, slot_id, data),
+        }
+    } // AteccDevice::mac_compute()
+
+    /// A function that verifies the value of MAC (Message Authentication Code) for a message
+    fn mac_verify(
+        &self,
+        algorithm: MacAlgorithm,
+        slot_id: u8,
+        data: &[u8],
+    ) -> Result<bool, AtcaStatus> {
+        if self.check_that_configuration_is_not_locked(true) {
+            return Err(AtcaStatus::AtcaNotLocked);
+        }
+        if (discriminant(&algorithm) != discriminant(&MacAlgorithm::HmacSha256(Default::default())))
+            && !self.is_aes_enabled()
+        {
+            // If chip does not support AES hardware encryption, an operation other than HmacSha256 cannot be performed
+            return Err(AtcaStatus::AtcaBadParam);
+        }
+
+        match algorithm {
+            MacAlgorithm::HmacSha256(mac_param) => {
+                self.verify_mac_hmac_sha256(mac_param, slot_id, data)
+            }
+            MacAlgorithm::Cbcmac(mac_param) => self.verify_mac_cbcmac(mac_param, slot_id, data),
+            MacAlgorithm::Cmac(mac_param) => self.verify_mac_cmac(mac_param, slot_id, data),
+        }
+    } // AteccDevice::mac_verify()
+
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType {
         AtcaDeviceType::from(unsafe {
@@ -1174,23 +1155,20 @@ impl AteccDevice {
     //--------------------------------------------------
 
     /// A generic function that reads data from the chip
-    fn read_zone(
-        &self,
-        zone: u8,
-        slot: u16,
-        block: u8,
-        offset: u8,
-        data: &mut Vec<u8>,
-        len: u8,
-    ) -> AtcaStatus {
-        data.resize(len as usize, 0);
-
+    fn read_zone(&self, zone: u8, slot: u16, block: u8, offset: u8, data: &mut [u8]) -> AtcaStatus {
         AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_read_zone(zone, slot, block, offset, data.as_mut_ptr(), len)
+            cryptoauthlib_sys::atcab_read_zone(
+                zone,
+                slot,
+                block,
+                offset,
+                data.as_mut_ptr(),
+                data.len() as u8,
+            )
         })
     } // AteccDevice::read_zone()
 
@@ -1265,10 +1243,122 @@ impl AteccDevice {
     // Private functions
     // ---------------------------------------------------------------
 
+    /// function that writes the key type 'P256EccKey' to the ATECCx08 chip
+    fn write_p256_ecc_key_to_slot(&self, key_data: &[u8], slot: u16) -> AtcaStatus {
+        match key_data.len() {
+            ATCA_ATECC_PUB_KEY_SIZE => {
+                if slot < ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY as u16 {
+                    return AtcaStatus::AtcaInvalidId;
+                }
+
+                AtcaStatus::from(unsafe {
+                    let _guard = self
+                        .api_mutex
+                        .lock()
+                        .expect("Could not lock atcab API mutex");
+                    cryptoauthlib_sys::atcab_write_pubkey(slot, key_data.as_ptr())
+                })
+            }
+            ATCA_ATECC_PRIV_KEY_SIZE => {
+                let mut temp_key: Vec<u8> = vec![0; 4];
+                temp_key.extend_from_slice(key_data);
+
+                if let Some(write_key_idx) = self.get_write_key_idx(slot as u8) {
+                    let mut write_key = vec![0; ATCA_KEY_SIZE];
+                    let result = self.get_access_key(write_key_idx, &mut write_key);
+
+                    if AtcaStatus::AtcaSuccess == result {
+                        let mut num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
+
+                        AtcaStatus::from(unsafe {
+                            let _guard = self
+                                .api_mutex
+                                .lock()
+                                .expect("Could not lock atcab API mutex");
+                            cryptoauthlib_sys::atcab_priv_write(
+                                slot,
+                                temp_key.as_ptr(),
+                                write_key_idx as u16,
+                                write_key.as_ptr(),
+                                num_in.as_mut_ptr(),
+                            )
+                        })
+                    } else {
+                        result
+                    }
+                } else {
+                    AtcaStatus::AtcaBadParam
+                }
+            }
+            _ => AtcaStatus::AtcaInvalidSize,
+        }
+    } // AteccDevice::write_p256_ecc_key_to_slot()
+
+    /// function that writes the key type 'Aes' to the ATECCx08 chip
+    fn write_aes_key_to_slot(&self, key_data: &[u8], slot: u16) -> AtcaStatus {
+        const BLOCK_IDX: u8 = 0;
+
+        if key_data.len() != ATCA_AES_KEY_SIZE {
+            return AtcaStatus::AtcaInvalidSize;
+        }
+
+        let mut temp_key: Vec<u8> = vec![0x00; ATCA_BLOCK_SIZE];
+        temp_key[..key_data.len()].copy_from_slice(key_data);
+
+        if slot != ATCA_ATECC_TEMPKEY_KEYID {
+            self.write_slot(slot, BLOCK_IDX, &temp_key)
+        } else {
+            self.nonce(NonceTarget::TempKey, &temp_key)
+        }
+    } // AteccDevice::write_aes_key_to_slot()
+
+    /// function that writes the key type 'ShaOrText' to the ATECCx08 chip
+    fn write_sha_or_text_key_to_slot(&self, key_data: &[u8], slot: u16) -> AtcaStatus {
+        if (ATCA_ATECC_TEMPKEY_KEYID == slot) && (key_data.len() <= ATCA_BLOCK_SIZE) {
+            let mut temp_key: Vec<u8> = vec![0x00; ATCA_NONCE_SIZE];
+            temp_key[..key_data.len()].copy_from_slice(key_data);
+            return self.nonce(NonceTarget::TempKey, &temp_key);
+        }
+        if key_data.len() > self.get_slot_capacity(slot as u8).bytes as usize {
+            return AtcaStatus::AtcaInvalidSize;
+        }
+
+        let mut start_pos: usize = 0;
+        let mut block: u8 = 0;
+        let mut shift: usize = min(key_data.len(), ATCA_BLOCK_SIZE);
+        let mut result: AtcaStatus = AtcaStatus::AtcaUnknown;
+
+        while shift > 0 {
+            match shift {
+                ATCA_BLOCK_SIZE => {
+                    result = self.write_slot(slot, block, &key_data[start_pos..(start_pos + shift)])
+                }
+                _ => {
+                    let mut buffer: [u8; ATCA_BLOCK_SIZE] = [0x00; ATCA_BLOCK_SIZE];
+                    buffer[..shift].clone_from_slice(&key_data[start_pos..(start_pos + shift)]);
+                    result = self.write_slot(slot, block, &buffer)
+                }
+            }
+            if result != AtcaStatus::AtcaSuccess {
+                return result;
+            }
+
+            start_pos += shift;
+            block += 1;
+            let remaining_bytes = key_data.len() - start_pos;
+            if 0 == remaining_bytes {
+                shift = 0
+            } else if remaining_bytes < ATCA_BLOCK_SIZE {
+                shift = remaining_bytes
+            }
+        }
+
+        result
+    } // AteccDevice::write_sha_or_text_key_to_slot()
+
     /// Function that reads a key of the 'Aes' type from the indicated slot
     fn read_aes_key_from_slot(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {
         const BLOCK_IDX: u8 = 0;
-        const OFFSET: u8 = 0;
 
         let slot_data = self.slots[slot_id as usize].config;
         if KeyType::Aes != slot_data.key_type {
@@ -1276,41 +1366,47 @@ impl AteccDevice {
         }
 
         let mut data_block: [u8; ATCA_BLOCK_SIZE] = [0; ATCA_BLOCK_SIZE];
-        let result: AtcaStatus;
 
-        if slot_data.is_secret && slot_data.read_key.encrypt_read {
-            let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
-            result =
-                self.read_slot_with_encryption(slot_id as u16, BLOCK_IDX, &mut data_block, &num_in);
-        } else {
-            result = self.read_zone(
-                ATCA_ZONE_DATA,
-                slot_id as u16,
-                BLOCK_IDX,
-                OFFSET,
-                &mut data_block.to_vec(),
-                ATCA_BLOCK_SIZE as u8,
-            );
-        }
+        let result = self.read_slot(slot_id as u16, BLOCK_IDX, &mut data_block);
+
         if AtcaStatus::AtcaSuccess == result {
-            *key = data_block.to_vec();
-            key.resize(ATCA_AES_KEY_SIZE, 0);
+            *key = data_block[..ATCA_AES_KEY_SIZE].to_vec()
         }
 
         result
     } // AteccDevice::read_aes_key_from_slot()
 
     /// Function that reads a key of the 'ShaOrText' type from the indicated slot
-    fn read_sha_or_text_key_from_slot(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {
+    fn read_sha_or_text_key_from_slot(&self, slot_id: u8, data: &mut [u8]) -> AtcaStatus {
         let slot_data = self.slots[slot_id as usize].config;
         if KeyType::ShaOrText != slot_data.key_type {
             return AtcaStatus::AtcaBadParam;
         }
-        if key.len() > self.get_slot_capacity(slot_id).bytes as usize {
+        if data.len() > self.get_slot_capacity(slot_id).bytes as usize {
             return AtcaStatus::AtcaInvalidSize;
         }
 
-        AtcaStatus::AtcaUnimplemented
+        let mut data_block: [u8; ATCA_BLOCK_SIZE] = [0x00; ATCA_BLOCK_SIZE];
+        let mut result: AtcaStatus = AtcaStatus::AtcaUnknown;
+
+        let modulo = data.len() % ATCA_BLOCK_SIZE;
+        let runs = (data.len() / ATCA_BLOCK_SIZE) + (0 != modulo) as usize - 1;
+
+        for idx in 0..=runs {
+            result = self.read_slot(slot_id as u16, idx as u8, &mut data_block);
+            if AtcaStatus::AtcaSuccess != result {
+                break;
+            }
+
+            let start_pos: usize = idx * ATCA_BLOCK_SIZE;
+            let shift: usize = match (runs == idx) && (0 != modulo) {
+                false => ATCA_BLOCK_SIZE,
+                _ => modulo,
+            };
+            data[start_pos..(start_pos + shift)].copy_from_slice(&data_block[..shift])
+        }
+
+        result
     } // AteccDevice::read_sha_or_text_key_from_slot()
 
     /// A helper function for the gen_key() and import_key() methods,
@@ -1324,8 +1420,9 @@ impl AteccDevice {
             return Err(AtcaStatus::AtcaInvalidId);
         }
         // First condition is a special situation when
-        // an AES key can be generated in an ATECC TempKey slot.
-        if ((slot_id == ATCA_ATECC_SLOTS_COUNT) && (key_type != KeyType::Aes))
+        // an 'ShaOrText' or AES key can be generated in an ATECC TempKey slot.
+        if ((ATCA_ATECC_SLOTS_COUNT == slot_id)
+            && !((key_type == KeyType::Aes) || (key_type == KeyType::ShaOrText)))
             || ((key_type == KeyType::Aes) && !self.chip_options.aes_enabled)
             || ((slot_id < ATCA_ATECC_SLOTS_COUNT)
                 && (key_type != self.slots[slot_id as usize].config.key_type))
@@ -1436,12 +1533,12 @@ impl AteccDevice {
 
     /// A function that checks if the chip supports AES hardware encryption
     fn is_aes_supported(&self) -> Result<bool, AtcaStatus> {
-        const LEN: u8 = 4;
+        const LEN: usize = 4;
         const OFFSET: u8 = 3;
         const INDEX_OF_AES_BYTE: usize = 1;
 
-        let mut data: Vec<u8> = vec![0; LEN as usize];
-        let read_status = self.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET, &mut data, LEN);
+        let mut data: [u8; LEN] = [0x00; LEN];
+        let read_status = self.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET, &mut data);
 
         match read_status {
             AtcaStatus::AtcaSuccess => Ok((data[INDEX_OF_AES_BYTE] & 1) != 0),
@@ -1451,16 +1548,16 @@ impl AteccDevice {
 
     /// A function that retrieves data about options supported by the ATECC chip
     fn get_chip_options_data_from_chip(&self) -> Result<ChipOptions, AtcaStatus> {
-        const LEN: u8 = 4;
+        const LEN: usize = 4;
         const OFFSET: u8 = 22;
         const FIRST_DATA_BYTE: usize = 2;
         const SECOND_DATA_BYTE: usize = 3;
         const IO_KEY_EN_POS: u8 = 1;
         const KDF_AES_EN_POS: u8 = 2;
 
-        let mut data: Vec<u8> = vec![0; LEN as usize];
+        let mut data: [u8; LEN] = [0x00; LEN];
         let mut chip_options: ChipOptions = Default::default();
-        let read_status = self.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET, &mut data, LEN);
+        let read_status = self.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET, &mut data);
 
         match read_status {
             AtcaStatus::AtcaSuccess => {
@@ -1523,7 +1620,23 @@ impl AteccDevice {
         })
     } // AteccDevice::read_serial_number()
 
-    /// A generic function that reads encrypted data from the chip
+    /// A generic function that reads data from a specific slot on a chip
+    fn read_slot(&self, slot: u16, block: u8, data: &mut [u8]) -> AtcaStatus {
+        let slot_data = self.slots[slot as usize].config;
+        let result: AtcaStatus;
+
+        if slot_data.is_secret && slot_data.read_key.encrypt_read {
+            let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
+            result = self.read_slot_with_encryption(slot as u16, block, data, &num_in)
+        } else {
+            const OFFSET: u8 = 0;
+            result = self.read_zone(ATCA_ZONE_DATA, slot as u16, block, OFFSET, data)
+        }
+
+        result
+    } // AteccDevice::read_slot()
+
+    /// A generic function that reads encrypted data from a specific slot on a chip
     fn read_slot_with_encryption(
         &self,
         slot: u16,
@@ -1567,24 +1680,35 @@ impl AteccDevice {
         }
     } // AteccDevice::read_slot_with_encryption()
 
-    /// Generic function that writes data to the chip
-    fn write_zone(
-        &self,
-        zone: u8,
-        slot: u16,
-        block: u8,
-        offset: u8,
-        data: &mut Vec<u8>,
-        len: u8,
-    ) -> AtcaStatus {
-        data.resize(len as usize, 0);
+    /// Generic function that writes data to a specific slot on a chip
+    fn write_slot(&self, slot: u16, block: u8, data: &[u8]) -> AtcaStatus {
+        const OFFSET: u8 = 0;
 
+        match self.slots[slot as usize].config.write_config {
+            WriteConfig::Always => self.write_zone(ATCA_ZONE_DATA, slot, block, OFFSET, data),
+            WriteConfig::Encrypt => {
+                let num_in: [u8; ATCA_NONCE_NUMIN_SIZE] = [0; ATCA_NONCE_NUMIN_SIZE];
+                self.write_slot_with_encryption(slot, block, data, &num_in)
+            }
+            _ => AtcaStatus::AtcaBadParam,
+        }
+    } // AteccDevice::write_slot()
+
+    /// Generic function that writes data to the chip
+    fn write_zone(&self, zone: u8, slot: u16, block: u8, offset: u8, data: &[u8]) -> AtcaStatus {
         AtcaStatus::from(unsafe {
             let _guard = self
                 .api_mutex
                 .lock()
                 .expect("Could not lock atcab API mutex");
-            cryptoauthlib_sys::atcab_write_zone(zone, slot, block, offset, data.as_mut_ptr(), len)
+            cryptoauthlib_sys::atcab_write_zone(
+                zone,
+                slot,
+                block,
+                offset,
+                data.as_ptr(),
+                data.len() as u8,
+            )
         })
     } // AteccDevice::write_zone()
 

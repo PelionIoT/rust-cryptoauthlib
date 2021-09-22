@@ -7,8 +7,8 @@ use std::mem::MaybeUninit;
 
 use super::{
     AeadAlgorithm, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus,
-    AteccDeviceTrait, CipherAlgorithm, InfoCmdType, KeyType, NonceTarget, OutputProtectionState,
-    SignMode, VerifyMode,
+    AteccDeviceTrait, CipherAlgorithm, InfoCmdType, KeyType, MacAlgorithm, NonceTarget,
+    OutputProtectionState, SignMode, VerifyMode,
 };
 
 use super::{ATCA_AES_DATA_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
@@ -141,6 +141,30 @@ impl AteccDeviceTrait for AteccDevice {
             _ => Err(self.default_dev_status()),
         }
     }
+    /// A function that calculates the MAC (Message Authentication Code) value for a message
+    fn mac_compute(
+        &self,
+        _algorithm: MacAlgorithm,
+        _slot_id: u8,
+        _data: &[u8],
+    ) -> Result<Vec<u8>, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(vec![0; ATCA_AES_DATA_SIZE]),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    /// A function that verifies the value of MAC (Message Authentication Code) for a message
+    fn mac_verify(
+        &self,
+        _algorithm: MacAlgorithm,
+        _slot_id: u8,
+        _data: &[u8],
+    ) -> Result<bool, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(true),
+            _ => Err(self.default_dev_status()),
+        }
+    }
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType {
         self.dev_type
@@ -240,10 +264,8 @@ impl AteccDeviceTrait for AteccDevice {
         _slot: u16,
         _block: u8,
         _offset: u8,
-        data: &mut Vec<u8>,
-        _len: u8,
+        _data: &mut [u8],
     ) -> AtcaStatus {
-        data.clear();
         self.default_dev_status()
     }
     /// Request ATECC to read and return own configuration zone.

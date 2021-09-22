@@ -31,13 +31,13 @@ struct Interface {
 }
 
 pub(crate) fn is_chip_version_608(device: &AteccDevice) -> Result<bool, AtcaStatus> {
-    const LEN: u8 = 4;
+    const LEN: usize = 4;
     const OFFSET_REV: u8 = 1;
     const INDEX_OF_REV: usize = 2;
 
-    let mut data: Vec<u8> = Vec::with_capacity(LEN as usize);
+    let mut data: [u8; LEN] = [0x00; LEN];
 
-    let result_dev_type = device.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET_REV, &mut data, LEN);
+    let result_dev_type = device.read_zone(ATCA_ZONE_CONFIG, 0, 0, OFFSET_REV, &mut data);
 
     match result_dev_type {
         AtcaStatus::AtcaSuccess => Ok((data[INDEX_OF_REV] & 0xF0) == 0x60),

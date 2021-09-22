@@ -171,6 +171,36 @@ impl Default for AeadParam {
     }
 }
 
+/// MAC algorithm to compute
+#[derive(Clone, Debug, PartialEq)]
+pub enum MacAlgorithm {
+    HmacSha256(MacParam),
+    Cbcmac(MacParam),
+    Cmac(MacParam),
+}
+
+/// MAC algorithm parameters for compute
+#[derive(Clone, Debug, PartialEq)]
+pub struct MacParam {
+    /// external encryption/decryption key needed for MAC calculation
+    /// when an 'AES' or 'ShaOrText' key stored in the cryptochip is not used
+    pub key: Option<Vec<u8>>,
+    /// MAC length generated during calculation
+    pub mac_length: Option<u8>,
+    /// MAC to verify authenticity of the provided data
+    pub mac: Option<Vec<u8>>,
+}
+
+impl Default for MacParam {
+    fn default() -> MacParam {
+        MacParam {
+            key: None,
+            mac_length: None,
+            mac: None,
+        }
+    }
+}
+
 /// Data context structure for AEAD encryption in CCM mode
 #[derive(Copy, Clone, Debug)]//, PartialEq)]
 pub struct AtcaAesCcmCtx {

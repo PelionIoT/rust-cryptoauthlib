@@ -80,6 +80,20 @@ pub trait AteccDeviceTrait {
         slot_id: u8,
         data: &mut Vec<u8>,
     ) -> Result<bool, AtcaStatus>;
+    /// A function that calculates the MAC (Message Authentication Code) value for a message
+    fn mac_compute(
+        &self,
+        algorithm: MacAlgorithm,
+        slot_id: u8,
+        data: &[u8],
+    ) -> Result<Vec<u8>, AtcaStatus>;
+    /// A function that verifies the value of MAC (Message Authentication Code) for a message
+    fn mac_verify(
+        &self,
+        algorithm: MacAlgorithm,
+        slot_id: u8,
+        data: &[u8],
+    ) -> Result<bool, AtcaStatus>;
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
@@ -128,15 +142,7 @@ pub trait AteccDeviceTrait {
 
     /// A generic function that reads data from the chip
     #[cfg(test)]
-    fn read_zone(
-        &self,
-        zone: u8,
-        slot: u16,
-        block: u8,
-        offset: u8,
-        data: &mut Vec<u8>,
-        len: u8,
-    ) -> AtcaStatus;
+    fn read_zone(&self, zone: u8, slot: u16, block: u8, offset: u8, data: &mut [u8]) -> AtcaStatus;
     /// Request ATECC to read and return own configuration zone.
     /// Note: this function returns raw data, function get_config(..) implements a more
     /// structured return value.
