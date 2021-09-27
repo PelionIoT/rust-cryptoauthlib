@@ -1,10 +1,11 @@
 [package]
 name = "rust-cryptoauthlib"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Robert Drazkowski <robert.drazkowski@globallogic.com>",
            "Michal Protasowicki <michal.protasowicki@globallogic.com>",
            "Krzysztof Bembnista <krzysztof.bembnista@globallogic.com>",
-           "Artur Kazimierski <artur.kazimierski@@globallogic.com>"]
+           "Artur Kazimierski <artur.kazimierski@@globallogic.com>",
+           "Tomasz Pawelec <tomasz.pawelec@globallogic.com>"]
 edition = "2018"
 description = "Rust wrappers for CryptoAuthentication Library bindings."
 repository = "https://github.com/PelionIoT/rust-cryptoauthlib/"
@@ -17,14 +18,14 @@ license = "Apache-2.0"
 
 [dependencies]
 cryptoauthlib-sys = { path = "../cryptoauthlib-sys", version = "0.2.1" }
-strum_macros = "0.19.4"
+strum_macros = "0.21.1"
 lazy_static = "1.4.0"
 rand = "0.8.0"
 log = { version = "0.4.14", features = ["serde"] }
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.4.2"
+toml = "0.5.8"
 serial_test = "0.5.1"
 
 [features]

@@ -13,31 +13,11 @@ use serial_test::serial;
 fn aes_cipher_block_bad_data() {
     let device = test_setup();
 
-    let mut chip_is_locked: bool = true;
-
     let data_bad_len: [u8; (ATCA_AES_DATA_SIZE - 1)] = [0x00; (ATCA_AES_DATA_SIZE - 1)];
 
-    let mut expected_bad_1 = AtcaStatus::AtcaBadParam;
-    let mut expected_bad_2 = AtcaStatus::AtcaBadParam;
-    let mut expected_bad_3 = AtcaStatus::AtcaBadParam;
     let mut result_bad_1 = AtcaStatus::AtcaUnknown;
     let mut result_bad_2 = AtcaStatus::AtcaUnknown;
     let mut result_bad_3 = AtcaStatus::AtcaUnknown;
-
-    if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
-        println!("\u{001b}[1m\u{001b}[33mConfiguration and/or Data zone not Locked!\u{001b}[0m ");
-        chip_is_locked = false;
-
-        expected_bad_1 = AtcaStatus::AtcaNotLocked;
-        expected_bad_2 = AtcaStatus::AtcaNotLocked;
-        expected_bad_3 = AtcaStatus::AtcaNotLocked;
-    }
-
-    if chip_is_locked && device.is_aes_enabled() {
-        expected_bad_1 = AtcaStatus::AtcaInvalidSize;
-        expected_bad_2 = AtcaStatus::AtcaInvalidSize;
-        expected_bad_3 = AtcaStatus::AtcaInvalidSize;
-    }
 
     match device.aes_encrypt_block(ATCA_ATECC_TEMPKEY_KEYID, 0x00, &data_bad_len) {
         Ok(_) => (),
@@ -56,9 +36,9 @@ fn aes_cipher_block_bad_data() {
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
-    assert_eq!(result_bad_1, expected_bad_1);
-    assert_eq!(result_bad_2, expected_bad_2);
-    assert_eq!(result_bad_3, expected_bad_3);
+    assert_eq!(result_bad_1, AtcaStatus::AtcaInvalidSize);
+    assert_eq!(result_bad_2, AtcaStatus::AtcaInvalidSize);
+    assert_eq!(result_bad_3, AtcaStatus::AtcaInvalidSize);
 }
 
 #[test]

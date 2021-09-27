@@ -28,6 +28,12 @@ pub const ATCA_AES_KEY_SIZE: usize = cryptoauthlib_sys::AES_DATA_SIZE as usize;
 pub const ATCA_AES_GCM_IV_STD_LENGTH: usize = cryptoauthlib_sys::ATCA_AES_GCM_IV_STD_LENGTH as usize;
 /// Size (in bytes) of SHA hash
 pub const ATCA_SHA2_256_DIGEST_SIZE: usize = cryptoauthlib_sys::ATCA_SHA2_256_DIGEST_SIZE as usize;
+/// Place resulting SHA256 digest both in Output buffer and TempKey
+pub const SHA_MODE_TARGET_TEMPKEY: u8 = 0x00;
+/// Place resulting SHA256 digest both in Output buffer and Message Digest Buffer
+pub const SHA_MODE_TARGET_MSGDIGBUF: u8 = 0x40;
+/// Place resulting SHA256 digest in Output buffer ONLY
+pub const SHA_MODE_TARGET_OUT_ONLY: u8 = 0xC0;
 /// Private key size (in bytes) for elliptic curve P256 supported by ATECC
 pub const ATCA_ATECC_PRIV_KEY_SIZE: usize = cryptoauthlib_sys::ATCA_PRIV_KEY_SIZE as usize;
 /// Public key size (in bytes) for elliptic curve P256 supported by ATECC

@@ -5,13 +5,18 @@ use super::{
 };
 // Constants
 use super::{
-    ATCA_AES_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_NONCE_NUMIN_SIZE,
-    ATCA_RANDOM_BUFFER_SIZE, ATCA_SIG_SIZE,
+    ATCA_AES_KEY_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_BLOCK_SIZE,
+    ATCA_KEY_SIZE, ATCA_NONCE_NUMIN_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SIG_SIZE,
 };
 
 use super::hw_backend_common::*;
 use super::hw_impl::atcab_get_config_from_config_zone;
 use serial_test::serial;
+
+static WRITE_KEY: [u8; ATCA_KEY_SIZE] = [
+    0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD, 0x05,
+    0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49, 0x66, 0x45,
+];
 
 #[test]
 #[serial]
@@ -67,7 +72,7 @@ fn sha() {
 
 #[test]
 #[serial]
-fn nonce() {
+fn nonce_load() {
     let device = test_setup();
 
     let nonce_64 = [
@@ -90,9 +95,9 @@ fn nonce() {
         }
     };
 
-    let nonce_32_ok = device.nonce(NonceTarget::TempKey, &nonce_32);
+    let nonce_32_ok = device.nonce(NonceTarget::TempKey, nonce_32);
     let nonce_64_ok = device.nonce(NonceTarget::MsgDigBuf, &nonce_64);
-    let nonce_bad = device.nonce(NonceTarget::TempKey, &nonce_too_small);
+    let nonce_bad = device.nonce(NonceTarget::TempKey, nonce_too_small);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
@@ -115,7 +120,7 @@ fn nonce_rand() {
     let mut rand_out = Vec::new();
 
     let nonce_ok = device.nonce_rand(&nonce, &mut rand_out);
-    let nonce_bad = device.nonce_rand(&nonce_too_small, &mut rand_out);
+    let nonce_bad = device.nonce_rand(nonce_too_small, &mut rand_out);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
@@ -130,12 +135,6 @@ fn gen_key() {
     const ENCRYPTION_KEY_SLOT: u8 = 0x06;
 
     let device = test_setup();
-
-    let write_key = [
-        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
-        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
-        0x66, 0x45,
-    ];
 
     let mut chip_is_locked: bool = true;
     let mut expected_device_gen_key_ok_1 = AtcaStatus::AtcaSuccess;
@@ -169,7 +168,7 @@ fn gen_key() {
         }
     }
 
-    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, &write_key);
+    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
     let device_gen_key_ok_1 = device.gen_key(KeyType::P256EccKey, 0x00);
     let device_gen_key_ok_2 = device.gen_key(KeyType::Aes, 0x09);
     let device_gen_key_ok_3 = device.gen_key(KeyType::Aes, 0x04);
@@ -209,11 +208,6 @@ fn import_key() {
         0x00, 0xC5, 0x5C, 0x17, 0x73, 0x5A, 0x92, 0x4B, 0xB3, 0x9F, 0xE4, 0x98, 0x52, 0x62, 0xA5,
         0x36, 0xC5, 0x00, 0x9C,
     ];
-    let write_key = [
-        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
-        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
-        0x66, 0x45,
-    ];
     let priv_key_bad = &priv_key[0..=25];
     let pub_key_bad = &pub_key[0..=60];
     let aes_key = &priv_key[0..=15];
@@ -252,24 +246,24 @@ fn import_key() {
         expected_aes_key_bad_1 = AtcaStatus::AtcaInvalidSize;
     }
 
-    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, &write_key);
+    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
     if chip_is_locked && (AtcaStatus::AtcaSuccess == write_key_set_success) {
         expected_priv_key_ok = AtcaStatus::AtcaSuccess;
     }
 
     let priv_key_ok = device.import_key(KeyType::P256EccKey, &priv_key, 0x02);
-    let priv_key_bad_1 = device.import_key(KeyType::P256EccKey, &priv_key_bad, 0x00);
+    let priv_key_bad_1 = device.import_key(KeyType::P256EccKey, priv_key_bad, 0x00);
     let priv_key_bad_2 = device.import_key(KeyType::P256EccKey, &priv_key, 0x01);
 
     let pub_key_ok = device.import_key(KeyType::P256EccKey, &pub_key, 0x0B);
-    let pub_key_bad_1 = device.import_key(KeyType::P256EccKey, &pub_key_bad, 0x0B);
+    let pub_key_bad_1 = device.import_key(KeyType::P256EccKey, pub_key_bad, 0x0B);
     // slot number too low
     let pub_key_bad_2 = device.import_key(KeyType::P256EccKey, &pub_key, 0x03);
     // writing to a slot with a key type other than P256
     let pub_key_bad_3 = device.import_key(KeyType::P256EccKey, &pub_key, 0x0C);
 
-    let aes_key_ok = device.import_key(KeyType::Aes, &aes_key, 0x09);
-    let aes_key_bad_1 = device.import_key(KeyType::Aes, &aes_key_bad, 0x09);
+    let aes_key_ok = device.import_key(KeyType::Aes, aes_key, 0x09);
+    let aes_key_bad_1 = device.import_key(KeyType::Aes, aes_key_bad, 0x09);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
@@ -355,12 +349,6 @@ fn export_key_aes() {
         0x94,
     ];
 
-    let write_key = [
-        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
-        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
-        0x66, 0x45,
-    ];
-
     let mut aes_key_read: Vec<u8> = Vec::new();
 
     let mut expected_export_key_bad_1 = AtcaStatus::AtcaInvalidId;
@@ -385,7 +373,7 @@ fn export_key_aes() {
         device.export_key(KeyType::Aes, &mut aes_key_read, ATCA_ATECC_SLOTS_COUNT);
     let export_key_bad_2 = device.export_key(KeyType::Aes, &mut aes_key_read, AES_SLOT_IDX_BAD);
 
-    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &write_key);
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
     let import_key_result = device.import_key(KeyType::Aes, &aes_key_write, AES_SLOT_IDX_OK);
     let export_key_ok_1 = device.export_key(KeyType::Aes, &mut aes_key_read, AES_SLOT_IDX_OK);
     // Due to the limited number of available slots, there is no AES slot in the configuration with reading without encryption
@@ -401,6 +389,182 @@ fn export_key_aes() {
     if (AtcaStatus::AtcaNotLocked != expected_export_key_ok_1) && device.is_aes_enabled() {
         assert_eq!(aes_key_read, aes_key_write.to_vec())
     }
+}
+
+#[test]
+#[serial]
+fn import_export_key_sha_or_text_proper_data() {
+    const SLOT_IDX_OK_ENCR_RW: u8 = 0x01;
+    const SLOT_IDX_OK_NO_ENCR_RW: u8 = 0x0A;
+    const ENCRYPTION_KEY_SLOT: u8 = 0x06;
+    const SHORT_LEN: usize = ATCA_BLOCK_SIZE - 3;
+
+    let key_write = [
+        0xBA, 0x6A, 0xB5, 0xF1, 0x19, 0xAF, 0x21, 0x73, 0x03, 0x75, 0xD1, 0x8D, 0x6B, 0x5F, 0xF1,
+        0x94, 0xBA, 0x6A, 0xB5, 0xF1, 0x19, 0xAF, 0x21, 0x73, 0x03, 0x75, 0xD1, 0x8D, 0x6B, 0x5F,
+        0xF1, 0x94, 0xA5,
+    ];
+
+    let device = test_setup();
+
+    let mut chip_is_locked: bool = true;
+
+    let mut key_read: Vec<u8> = vec![0x00; key_write.len()];
+    let mut key_read_encr: Vec<u8> = vec![0x00; key_write.len()];
+    let mut key_read_short: Vec<u8> = vec![0x00; SHORT_LEN];
+
+    let mut expected_import_key_ok_1 = AtcaStatus::AtcaBadParam;
+    let mut expected_import_key_ok_2 = AtcaStatus::AtcaBadParam;
+    let mut expected_import_key_ok_3 = AtcaStatus::AtcaBadParam;
+    let mut expected_import_key_ok_4 = AtcaStatus::AtcaBadParam;
+    let mut expected_export_key_ok_1 = AtcaStatus::AtcaBadParam;
+    let mut expected_export_key_ok_2 = AtcaStatus::AtcaBadParam;
+    let mut expected_export_key_ok_3 = AtcaStatus::AtcaBadParam;
+
+    if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
+        println!("\u{001b}[1m\u{001b}[33mConfiguration and/or Data zone not Locked!\u{001b}[0m ");
+        chip_is_locked = false;
+
+        expected_import_key_ok_1 = AtcaStatus::AtcaNotLocked;
+        expected_import_key_ok_2 = AtcaStatus::AtcaNotLocked;
+        expected_import_key_ok_3 = AtcaStatus::AtcaNotLocked;
+        expected_import_key_ok_4 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_ok_1 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_ok_2 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_ok_3 = AtcaStatus::AtcaNotLocked;
+    }
+
+    if chip_is_locked {
+        expected_import_key_ok_1 = AtcaStatus::AtcaSuccess;
+        expected_import_key_ok_2 = AtcaStatus::AtcaSuccess;
+        expected_import_key_ok_3 = AtcaStatus::AtcaSuccess;
+        expected_import_key_ok_4 = AtcaStatus::AtcaSuccess;
+        expected_export_key_ok_1 = AtcaStatus::AtcaSuccess;
+        expected_export_key_ok_2 = AtcaStatus::AtcaSuccess;
+        expected_export_key_ok_3 = AtcaStatus::AtcaSuccess;
+    }
+
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
+
+    let import_key_ok_1 = device.import_key(KeyType::ShaOrText, &key_write, SLOT_IDX_OK_NO_ENCR_RW);
+    let export_key_ok_1 =
+        device.export_key(KeyType::ShaOrText, &mut key_read, SLOT_IDX_OK_NO_ENCR_RW);
+    let import_key_ok_2 = device.import_key(KeyType::ShaOrText, &key_write, SLOT_IDX_OK_ENCR_RW);
+    let export_key_ok_2 =
+        device.export_key(KeyType::ShaOrText, &mut key_read_encr, SLOT_IDX_OK_ENCR_RW);
+
+    let import_key_ok_3 = device.import_key(
+        KeyType::ShaOrText,
+        &key_write[..SHORT_LEN],
+        SLOT_IDX_OK_NO_ENCR_RW,
+    );
+    let export_key_ok_3 = device.export_key(
+        KeyType::ShaOrText,
+        &mut key_read_short,
+        SLOT_IDX_OK_NO_ENCR_RW,
+    );
+    let import_key_ok_4 = device.import_key(
+        KeyType::ShaOrText,
+        &key_write[..ATCA_BLOCK_SIZE],
+        ATCA_ATECC_SLOTS_COUNT,
+    );
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(device_set_write_key, AtcaStatus::AtcaSuccess);
+    assert_eq!(import_key_ok_1, expected_import_key_ok_1);
+    assert_eq!(export_key_ok_1, expected_export_key_ok_1);
+    assert_eq!(import_key_ok_2, expected_import_key_ok_2);
+    assert_eq!(export_key_ok_2, expected_export_key_ok_2);
+    assert_eq!(import_key_ok_3, expected_import_key_ok_3);
+    assert_eq!(export_key_ok_3, expected_export_key_ok_3);
+    assert_eq!(import_key_ok_4, expected_import_key_ok_4);
+    if chip_is_locked {
+        assert_eq!(key_read, key_write.to_vec());
+        assert_eq!(key_read_encr, key_write.to_vec());
+        assert_eq!(key_read_short, key_write[..SHORT_LEN].to_vec());
+    }
+}
+
+#[test]
+#[serial]
+fn import_export_key_sha_or_text_bad_data() {
+    const SLOT_IDX_NO_TYPE_SHA_OR_TEXT: u8 = 0x00;
+    const SLOT_IDX_OK_NO_ENCR_RW: u8 = 0x0A;
+    const DATA_SIZE_TOO_LARGE: usize = 73;
+
+    let device = test_setup();
+
+    let mut chip_is_locked: bool = true;
+
+    let key_write = [0xA5; DATA_SIZE_TOO_LARGE];
+    let mut key_read: Vec<u8> = vec![0x00; ATCA_BLOCK_SIZE];
+    let mut key_read_too_big: Vec<u8> = vec![0x00; DATA_SIZE_TOO_LARGE];
+
+    let mut expected_import_key_bad_1 = AtcaStatus::AtcaUnknown;
+    let mut expected_import_key_bad_2 = AtcaStatus::AtcaUnknown;
+    let mut expected_import_key_bad_3 = AtcaStatus::AtcaUnknown;
+    let mut expected_export_key_bad_1 = AtcaStatus::AtcaUnknown;
+    let mut expected_export_key_bad_2 = AtcaStatus::AtcaUnknown;
+    let mut expected_export_key_bad_3 = AtcaStatus::AtcaUnknown;
+
+    if !(device.is_configuration_locked() && device.is_data_zone_locked()) {
+        println!("\u{001b}[1m\u{001b}[33mConfiguration and/or Data zone not Locked!\u{001b}[0m ");
+        chip_is_locked = false;
+
+        expected_import_key_bad_1 = AtcaStatus::AtcaNotLocked;
+        expected_import_key_bad_2 = AtcaStatus::AtcaNotLocked;
+        expected_import_key_bad_3 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_bad_1 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_bad_2 = AtcaStatus::AtcaNotLocked;
+        expected_export_key_bad_3 = AtcaStatus::AtcaNotLocked;
+    }
+
+    if chip_is_locked {
+        expected_import_key_bad_1 = AtcaStatus::AtcaInvalidId;
+        expected_import_key_bad_2 = AtcaStatus::AtcaBadParam;
+        expected_import_key_bad_3 = AtcaStatus::AtcaInvalidSize;
+        expected_export_key_bad_1 = AtcaStatus::AtcaInvalidId;
+        expected_export_key_bad_2 = AtcaStatus::AtcaBadParam;
+        expected_export_key_bad_3 = AtcaStatus::AtcaInvalidSize;
+    }
+
+    // slot_id is too big
+    let import_key_bad_1 = device.import_key(
+        KeyType::ShaOrText,
+        &key_write[..ATCA_BLOCK_SIZE],
+        ATCA_ATECC_SLOTS_COUNT + 1,
+    );
+    let export_key_bad_1 =
+        device.export_key(KeyType::ShaOrText, &mut key_read, ATCA_ATECC_SLOTS_COUNT);
+    // slot holds a key other than ShaOrText
+    let import_key_bad_2 = device.import_key(
+        KeyType::ShaOrText,
+        &key_write[..ATCA_BLOCK_SIZE],
+        SLOT_IDX_NO_TYPE_SHA_OR_TEXT,
+    );
+    let export_key_bad_2 = device.export_key(
+        KeyType::ShaOrText,
+        &mut key_read,
+        SLOT_IDX_NO_TYPE_SHA_OR_TEXT,
+    );
+    // a key size greater than the size of slot
+    let import_key_bad_3 =
+        device.import_key(KeyType::ShaOrText, &key_write, SLOT_IDX_OK_NO_ENCR_RW);
+    let export_key_bad_3 = device.export_key(
+        KeyType::ShaOrText,
+        &mut key_read_too_big,
+        SLOT_IDX_OK_NO_ENCR_RW,
+    );
+
+    assert_eq!(device.release().to_string(), "AtcaSuccess");
+
+    assert_eq!(import_key_bad_1, expected_import_key_bad_1);
+    assert_eq!(export_key_bad_1, expected_export_key_bad_1);
+    assert_eq!(import_key_bad_2, expected_import_key_bad_2);
+    assert_eq!(export_key_bad_2, expected_export_key_bad_2);
+    assert_eq!(import_key_bad_3, expected_import_key_bad_3);
+    assert_eq!(export_key_bad_3, expected_export_key_bad_3);
 }
 
 #[test]
@@ -479,12 +643,6 @@ fn gen_key_sign_hash() {
 
     let device = test_setup();
 
-    let write_key = [
-        0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD,
-        0x05, 0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49,
-        0x66, 0x45,
-    ];
-
     let mut expected_device_sha = AtcaStatus::AtcaSuccess;
     let mut expected_device_gen_key = AtcaStatus::AtcaSuccess;
     let mut expected_device_sign_hash = AtcaStatus::AtcaSuccess;
@@ -499,7 +657,7 @@ fn gen_key_sign_hash() {
         expected_device_sign_hash = AtcaStatus::AtcaNotLocked;
     }
 
-    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &write_key);
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
 
     let mut digest: Vec<u8> = Vec::new();
     let device_sha = device.sha("Bob wrote this message.".as_bytes().to_vec(), &mut digest);
