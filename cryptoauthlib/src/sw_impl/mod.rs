@@ -7,9 +7,12 @@ use std::mem::MaybeUninit;
 
 use super::{
     AeadAlgorithm, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus,
-    AteccDeviceTrait, CipherAlgorithm, InfoCmdType, KeyType, MacAlgorithm, NonceTarget,
-    OutputProtectionState, SignMode, VerifyMode,
+    AteccDeviceTrait, CipherAlgorithm, InfoCmdType, KdfAlgorithm, KdfParams, KdfResult, KeyType,
+    MacAlgorithm, NonceTarget, OutputProtectionState, SignMode, VerifyMode,
 };
+
+#[cfg(test)]
+use super::AtcaSlotCapacity;
 
 use super::{ATCA_AES_DATA_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE};
 use rand::{distributions::Standard, Rng};
@@ -165,6 +168,22 @@ impl AteccDeviceTrait for AteccDevice {
             _ => Err(self.default_dev_status()),
         }
     }
+    /// KDF command function, which derives a new key in PRF, AES, or HKDF modes
+    fn kdf(
+        &self,
+        _algorithm: KdfAlgorithm,
+        _parameters: KdfParams,
+        _message: Option<&[u8]>,
+        _message_length: usize,
+    ) -> Result<KdfResult, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(KdfResult {
+                out_data: None,
+                out_nonce: None,
+            }),
+            _ => Err(self.default_dev_status()),
+        }
+    }
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType {
         self.dev_type
@@ -228,6 +247,10 @@ impl AteccDeviceTrait for AteccDevice {
         matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
     }
 
+    fn is_kdf_iv_enabled(&self) -> bool {
+        matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
+    }
+
     fn is_io_protection_key_enabled(&self) -> bool {
         matches!(self.default_dev_status(), AtcaStatus::AtcaSuccess)
     }
@@ -238,6 +261,25 @@ impl AteccDeviceTrait for AteccDevice {
 
     fn get_kdf_output_protection_state(&self) -> OutputProtectionState {
         OutputProtectionState::ClearTextAllowed
+    }
+
+    /// invoke sleep on the CryptoAuth device
+    fn sleep(&self) -> AtcaStatus {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevFailUnimplemented | AtcaDeviceType::AtcaTestDevSuccess => {
+                AtcaStatus::AtcaSuccess
+            }
+            _ => AtcaStatus::AtcaUnimplemented,
+        }
+    }
+
+    fn wakeup(&self) -> AtcaStatus {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevFailUnimplemented | AtcaDeviceType::AtcaTestDevSuccess => {
+                AtcaStatus::AtcaSuccess
+            }
+            _ => AtcaStatus::AtcaUnimplemented,
+        }
     }
 
     /// ATECC device instance destructor
@@ -350,6 +392,13 @@ impl AteccDeviceTrait for AteccDevice {
             }
             _ => Err(self.default_dev_status()),
         }
+    }
+    // A helper function that returns number of blocks and bytes of data
+    /// available for a given socket
+    #[cfg(test)]
+    fn get_slot_capacity(&self, _slot_id: u8) -> AtcaSlotCapacity {
+        let result: AtcaSlotCapacity = { Default::default() };
+        result
     }
 }
 

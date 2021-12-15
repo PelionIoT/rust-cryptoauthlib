@@ -201,6 +201,139 @@ impl Default for MacParam {
     }
 }
 
+/// KDF algorithm to derive key
+#[derive(Clone, Debug, PartialEq)]
+pub enum KdfAlgorithm {
+    Prf(PrfDetails),
+    Hkdf(HkdfDetails),
+    Aes,
+}
+
+/// KDF function parameters
+#[derive(Clone, Debug, PartialEq)]
+pub struct KdfParams {
+    pub source: KdfSource,
+    pub target: KdfTarget,
+    pub source_slot_id: Option<u8>,
+    pub target_slot_id: Option<u8>,
+}
+
+impl Default for KdfParams {
+    fn default() -> KdfParams {
+        KdfParams {
+            source: KdfSource::TempKey,
+            target: KdfTarget::Output,
+            source_slot_id: None,
+            target_slot_id: None,
+        }
+    }
+}
+
+/// KDF sources
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u8)]
+pub enum KdfSource {
+    TempKey = KDF_MODE_SOURCE_TEMPKEY,
+    TempKeyUp = KDF_MODE_SOURCE_TEMPKEY_UP,
+    Slot = KDF_MODE_SOURCE_SLOT,
+    AltKeyBuf = KDF_MODE_SOURCE_ALTKEYBUF,
+}
+
+/// KDF targets. Possibility of exporting KDF function result outside the chip
+/// depends on "chip_options.kdf_output_protection" variable
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u8)]
+pub enum KdfTarget {
+    TempKey = KDF_MODE_TARGET_TEMPKEY,
+    TempKeyUp = KDF_MODE_TARGET_TEMPKEY_UP,
+    Slot = KDF_MODE_TARGET_SLOT,
+    AltKeyBuf = KDF_MODE_TARGET_ALTKEYBUF,
+    Output = KDF_MODE_TARGET_OUTPUT,
+    OutputEnc = KDF_MODE_TARGET_OUTPUT_ENC,
+}
+
+/// KDF details for PRF, source key length
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u32)]
+pub enum KdfPrfKeyLen {
+    Len16 = KDF_DETAILS_PRF_KEY_LEN_16,
+    Len32 = KDF_DETAILS_PRF_KEY_LEN_32,
+    Len48 = KDF_DETAILS_PRF_KEY_LEN_48,
+    Len64 = KDF_DETAILS_PRF_KEY_LEN_64,
+}
+
+/// KDF details for PRF, target length
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u32)]
+pub enum KdfPrfTargetLen {
+    Len32 = KDF_DETAILS_PRF_TARGET_LEN_32,
+    Len64 = KDF_DETAILS_PRF_TARGET_LEN_64,
+}
+
+impl From<KdfPrfTargetLen> for usize {
+    fn from(orig: KdfPrfTargetLen) -> Self {
+        match orig {
+            KdfPrfTargetLen::Len32 => 32,
+            KdfPrfTargetLen::Len64 => 64,
+        }
+    }
+}
+
+/// KDF details for PRF
+#[derive(Clone, Debug, PartialEq)]
+pub struct PrfDetails {
+    pub key_length: KdfPrfKeyLen,
+    pub target_length: KdfPrfTargetLen,
+}
+
+impl Default for PrfDetails {
+    fn default() -> PrfDetails {
+        PrfDetails {
+            key_length: KdfPrfKeyLen::Len32,
+            target_length: KdfPrfTargetLen::Len64,
+        }
+    }
+}
+
+/// KDF details for HKDF. [place from which function should retrieve message for calculations]
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u32)]
+pub enum HkdfMsgLoc {
+    Slot = KDF_DETAILS_HKDF_MSG_LOC_SLOT,
+    TempKey = KDF_DETAILS_HKDF_MSG_LOC_TEMPKEY,
+    Input = KDF_DETAILS_HKDF_MSG_LOC_INPUT,
+    Iv =  KDF_DETAILS_HKDF_MSG_LOC_IV,
+}
+
+/// KDF details for HKDF
+#[derive(Clone, Debug, PartialEq)]
+pub struct HkdfDetails {
+    pub msg_loc: HkdfMsgLoc,
+    /// if true then a vector of thirty-two zero bytes will be used as the key
+    pub zero_key: bool,
+    /// if source of message is a slot, its identifier must be entered
+    pub msg_slot: Option<u8>,
+}
+
+impl Default for HkdfDetails {
+    fn default() -> HkdfDetails {
+        HkdfDetails {
+            msg_loc: HkdfMsgLoc::Input,
+            zero_key: false,
+            msg_slot: None,
+        }
+    }
+}
+
+/// KDF result structure
+#[derive(Clone, Debug, PartialEq)]
+pub struct KdfResult {
+    /// Data are available only when the target of the KDF function is 'Output' or 'OutputEnc'
+    pub out_data: Option<Vec<u8>>,
+    /// Data are available only when the target of the KDF function is 'OutputEnc'
+    pub out_nonce: Option<Vec<u8>>,
+}
+
 /// Data context structure for AEAD encryption in CCM mode
 #[derive(Copy, Clone, Debug)]//, PartialEq)]
 pub struct AtcaAesCcmCtx {
@@ -252,14 +385,22 @@ pub struct ChipOptions {
     pub io_key_enabled: bool,
     /// slot number where the key for encrypting transmission between chip and host is placed
     pub io_key_in_slot: u8,
-    ///
+    /// flag, on-chip availability, AES function
     pub aes_enabled: bool,
-    ///
+    /// flag, on-chip availability, AES functionality for KDF command
     pub kdf_aes_enabled: bool,
-    ///
+    /// restrictions on the way the ECDH command result can be used
     pub ecdh_output_protection: OutputProtectionState,
-    ///
+    /// restrictions on the way the KDF command result can be used
     pub kdf_output_protection: OutputProtectionState,
+    /// availability flag of the special function of the IV KDF command 
+    pub kdf_iv_enabled: bool,
+    /// place in message where special data bytes must be placed
+    /// when calling function IV of the KDF command
+    pub kdf_iv_location_at: usize,
+    /// two bytes of data that must be included in message
+    /// when calling function IV of the KDF command
+    pub kdf_iv_str: [u8; 0x02],
 }
 
 impl Default for ChipOptions {
@@ -271,6 +412,9 @@ impl Default for ChipOptions {
             kdf_aes_enabled: false,
             ecdh_output_protection: OutputProtectionState::Invalid,
             kdf_output_protection: OutputProtectionState::Invalid,
+            kdf_iv_enabled: false,
+            kdf_iv_location_at: 0x00,
+            kdf_iv_str: [0x00, 0x00],
         }
     }
 }

@@ -150,9 +150,7 @@ impl AteccDevice {
             ctx = self.aes_cmac_update(ctx, block)?;
             start_pos += shift;
             let remaining_bytes = data.len() - start_pos;
-            if 0 == remaining_bytes {
-                shift = 0
-            } else if remaining_bytes < ATCA_AES_DATA_SIZE {
+            if remaining_bytes < ATCA_AES_DATA_SIZE {
                 shift = remaining_bytes
             }
         }
@@ -222,9 +220,7 @@ impl AteccDevice {
             ctx = self.aes_cbcmac_update(ctx, block)?;
             start_pos += shift;
             let remaining_bytes = data.len() - start_pos;
-            if 0 == remaining_bytes {
-                shift = 0
-            } else if remaining_bytes < ATCA_AES_DATA_SIZE {
+            if remaining_bytes < ATCA_AES_DATA_SIZE {
                 shift = remaining_bytes
             }
         }

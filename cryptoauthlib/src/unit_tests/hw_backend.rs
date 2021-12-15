@@ -10,13 +10,8 @@ use super::{
 };
 
 use super::hw_backend_common::*;
-use super::hw_impl::atcab_get_config_from_config_zone;
+use super::hw_impl::atcab_get_slots_config_from_config_data;
 use serial_test::serial;
-
-static WRITE_KEY: [u8; ATCA_KEY_SIZE] = [
-    0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD, 0x05,
-    0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49, 0x66, 0x45,
-];
 
 #[test]
 #[serial]
@@ -168,7 +163,7 @@ fn gen_key() {
         }
     }
 
-    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
+    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, WRITE_KEY);
     let device_gen_key_ok_1 = device.gen_key(KeyType::P256EccKey, 0x00);
     let device_gen_key_ok_2 = device.gen_key(KeyType::Aes, 0x09);
     let device_gen_key_ok_3 = device.gen_key(KeyType::Aes, 0x04);
@@ -246,7 +241,7 @@ fn import_key() {
         expected_aes_key_bad_1 = AtcaStatus::AtcaInvalidSize;
     }
 
-    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
+    let write_key_set_success = device.add_access_key(ENCRYPTION_KEY_SLOT, WRITE_KEY);
     if chip_is_locked && (AtcaStatus::AtcaSuccess == write_key_set_success) {
         expected_priv_key_ok = AtcaStatus::AtcaSuccess;
     }
@@ -373,7 +368,7 @@ fn export_key_aes() {
         device.export_key(KeyType::Aes, &mut aes_key_read, ATCA_ATECC_SLOTS_COUNT);
     let export_key_bad_2 = device.export_key(KeyType::Aes, &mut aes_key_read, AES_SLOT_IDX_BAD);
 
-    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, WRITE_KEY);
     let import_key_result = device.import_key(KeyType::Aes, &aes_key_write, AES_SLOT_IDX_OK);
     let export_key_ok_1 = device.export_key(KeyType::Aes, &mut aes_key_read, AES_SLOT_IDX_OK);
     // Due to the limited number of available slots, there is no AES slot in the configuration with reading without encryption
@@ -444,7 +439,7 @@ fn import_export_key_sha_or_text_proper_data() {
         expected_export_key_ok_3 = AtcaStatus::AtcaSuccess;
     }
 
-    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, WRITE_KEY);
 
     let import_key_ok_1 = device.import_key(KeyType::ShaOrText, &key_write, SLOT_IDX_OK_NO_ENCR_RW);
     let export_key_ok_1 =
@@ -657,7 +652,7 @@ fn gen_key_sign_hash() {
         expected_device_sign_hash = AtcaStatus::AtcaNotLocked;
     }
 
-    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, &WRITE_KEY);
+    let device_set_write_key = device.add_access_key(ENCRYPTION_KEY_SLOT, WRITE_KEY);
 
     let mut digest: Vec<u8> = Vec::new();
     let device_sha = device.sha("Bob wrote this message.".as_bytes().to_vec(), &mut digest);
@@ -734,7 +729,7 @@ fn get_config_from_config_zone() {
     config_data[20] = 0b10000000;
     config_data[22] = 0b00000000;
     let mut slots: Vec<AtcaSlot> = Vec::new();
-    atcab_get_config_from_config_zone(&config_data, &mut slots);
+    atcab_get_slots_config_from_config_data(&config_data, &mut slots);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
 
