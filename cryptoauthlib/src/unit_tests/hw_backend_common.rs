@@ -5,7 +5,7 @@ use std::path::Path;
 // Types
 use super::{AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaStatus, AteccDevice};
 // Constants
-use super::ATCA_ZONE_CONFIG;
+use super::{ATCA_KEY_SIZE, ATCA_ZONE_CONFIG};
 // Functions
 use super::setup_atecc_device;
 
@@ -29,6 +29,11 @@ struct Interface {
     pub bus: u8,
     pub baud: u32,
 }
+
+pub(crate) const WRITE_KEY: &[u8] = &[
+    0x4D, 0x50, 0x72, 0x6F, 0x20, 0x49, 0x4F, 0x20, 0x4B, 0x65, 0x79, 0x20, 0x9E, 0x31, 0xBD, 0x05,
+    0x82, 0x58, 0x76, 0xCE, 0x37, 0x90, 0xEA, 0x77, 0x42, 0x32, 0xBB, 0x51, 0x81, 0x49, 0x66, 0x45,
+];
 
 pub(crate) fn is_chip_version_608(device: &AteccDevice) -> Result<bool, AtcaStatus> {
     const LEN: usize = 4;

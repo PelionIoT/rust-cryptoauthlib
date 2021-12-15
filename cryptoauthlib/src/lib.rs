@@ -94,6 +94,20 @@ pub trait AteccDeviceTrait {
         slot_id: u8,
         data: &[u8],
     ) -> Result<bool, AtcaStatus>;
+    /// KDF command function, which derives a new key in PRF, AES, or HKDF modes.
+    /// According to RFC-5869, the HKDF mode consists of two steps, extract and expand.
+    /// The "HMAC-Hash" base operation is implemented in the ATECC608x chip,
+    /// so to perform full HKDF operation, proceed as described in chapter 2 of RFC-5869,
+    /// first calculate PRK = HMAC-Hash(salt, IKM) and then use obtained PRK
+    /// to obtain the resulting OKM, again using the same "HMAC-Hash" function,
+    /// i.e. this "fn kdf", according to the algorithm from section 2.3 of RFC-5869.
+    fn kdf(
+        &self,
+        algorithm: KdfAlgorithm,
+        parameters: KdfParams,
+        message: Option<&[u8]>,
+        message_length: usize,
+    ) -> Result<KdfResult, AtcaStatus>;
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
@@ -122,6 +136,9 @@ pub trait AteccDeviceTrait {
     /// Checks if the chip supports AES for KDF operations
     /// (only relevant for the ATECC608x chip)
     fn is_kdf_aes_enabled(&self) -> bool;
+    /// Checks if the special KDF Initialization Vector function is enabled
+    /// (only relevant for the ATECC608x chip)
+    fn is_kdf_iv_enabled(&self) -> bool;
     /// Checks whether transmission between chip and host is to be encrypted
     /// (IO encryption is only possible for ATECC608x chip)
     fn is_io_protection_key_enabled(&self) -> bool;
@@ -131,6 +148,10 @@ pub trait AteccDeviceTrait {
     /// Function that reads the read security settings of the KDF function from chip
     /// (only relevant for the ATECC608x chip)
     fn get_kdf_output_protection_state(&self) -> OutputProtectionState;
+    /// wakeup the CryptoAuth device
+    fn wakeup(&self) -> AtcaStatus;
+    /// invoke sleep on the CryptoAuth device
+    fn sleep(&self) -> AtcaStatus;
     /// ATECC device instance destructor
     fn release(&self) -> AtcaStatus;
 
@@ -188,6 +209,10 @@ pub trait AteccDeviceTrait {
     /// Initialize context for AES CBC operation.
     #[cfg(test)]
     fn aes_cbc_init(&self, slot_id: u8, iv: &[u8]) -> Result<atca_aes_cbc_ctx_t, AtcaStatus>;
+    /// A helper function that returns number of blocks and bytes of data
+    /// available for a given socket
+    #[cfg(test)]
+    fn get_slot_capacity(&self, slot_id: u8) -> AtcaSlotCapacity;
 }
 
 pub type AteccDevice = Box<dyn AteccDeviceTrait + Send + Sync>;
