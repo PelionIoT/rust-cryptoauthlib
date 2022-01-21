@@ -108,6 +108,12 @@ pub trait AteccDeviceTrait {
         message: Option<&[u8]>,
         message_length: usize,
     ) -> Result<KdfResult, AtcaStatus>;
+    /// Function for generating premaster secret key using ECDH
+    fn ecdh(
+        &self,
+        parameters: EcdhParams,
+        peer_public_key: &[u8],
+    ) -> Result<EcdhResult, AtcaStatus>;
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.

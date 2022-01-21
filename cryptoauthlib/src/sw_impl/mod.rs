@@ -7,8 +7,9 @@ use std::mem::MaybeUninit;
 
 use super::{
     AeadAlgorithm, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceType, AtcaSlot, AtcaStatus,
-    AteccDeviceTrait, CipherAlgorithm, InfoCmdType, KdfAlgorithm, KdfParams, KdfResult, KeyType,
-    MacAlgorithm, NonceTarget, OutputProtectionState, SignMode, VerifyMode,
+    AteccDeviceTrait, CipherAlgorithm, EcdhParams, EcdhResult, InfoCmdType, KdfAlgorithm,
+    KdfParams, KdfResult, KeyType, MacAlgorithm, NonceTarget, OutputProtectionState, SignMode,
+    VerifyMode,
 };
 
 #[cfg(test)]
@@ -179,6 +180,20 @@ impl AteccDeviceTrait for AteccDevice {
         match self.dev_type {
             AtcaDeviceType::AtcaTestDevSuccess => Ok(KdfResult {
                 out_data: None,
+                out_nonce: None,
+            }),
+            _ => Err(self.default_dev_status()),
+        }
+    }
+    /// Function for generating premaster secret key using ECDH
+    fn ecdh(
+        &self,
+        _parameters: EcdhParams,
+        _peer_public_key: &[u8],
+    ) -> Result<EcdhResult, AtcaStatus> {
+        match self.dev_type {
+            AtcaDeviceType::AtcaTestDevSuccess => Ok(EcdhResult {
+                pms: None,
                 out_nonce: None,
             }),
             _ => Err(self.default_dev_status()),

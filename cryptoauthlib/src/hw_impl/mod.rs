@@ -14,26 +14,26 @@ use cryptoauthlib_sys::atca_aes_ctr_ctx_t;
 use super::{
     AeadAlgorithm, AeadParam, AtcaAesCcmCtx, AtcaDeviceType, AtcaIfaceCfg, AtcaIfaceCfgPtrWrapper,
     AtcaIfaceType, AtcaSlot, AtcaSlotCapacity, AtcaStatus, AteccDeviceTrait, ChipOptions,
-    CipherAlgorithm, CipherOperation, CipherParam, EccKeyAttr, FeedbackMode, HkdfMsgLoc,
-    InfoCmdType, KdfAlgorithm, KdfParams, KdfPrfKeyLen, KdfPrfTargetLen, KdfResult, KdfSource,
-    KdfTarget, KeyType, MacAlgorithm, MacParam, NonceTarget, OutputProtectionState, ReadKey,
-    SignMode, SlotConfig, VerifyMode, WriteConfig,
+    CipherAlgorithm, CipherOperation, CipherParam, EccKeyAttr, EcdhParams, EcdhResult, EcdhSource,
+    EcdhTarget, FeedbackMode, HkdfMsgLoc, InfoCmdType, KdfAlgorithm, KdfParams, KdfPrfKeyLen,
+    KdfPrfTargetLen, KdfResult, KdfSource, KdfTarget, KeyType, MacAlgorithm, MacParam, NonceTarget,
+    OutputProtectionState, ReadKey, SignMode, SlotConfig, VerifyMode, WriteConfig,
 };
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_AES_GCM_IV_STD_LENGTH, ATCA_AES_KEY_SIZE,
     ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY, ATCA_ATECC_PRIV_KEY_SIZE,
     ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_ATECC_TEMPKEY_KEYID,
-    ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE, ATCA_KEY_SIZE, ATCA_LOCK_ZONE_CONFIG,
-    ATCA_LOCK_ZONE_DATA, ATCA_NONCE_NUMIN_SIZE, ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE,
-    ATCA_SERIAL_NUM_SIZE, ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_DATA,
-    KDF_DETAILS_HKDF_ZERO_KEY, KDF_MAX_MSG_SIZE, KDF_MODE_ALG_AES, KDF_MODE_ALG_HKDF,
-    KDF_MODE_ALG_PRF, SHA_MODE_TARGET_TEMPKEY,
+    ATCA_ATSHA_CONFIG_BUFFER_SIZE, ATCA_BLOCK_SIZE, ATCA_ECDH_KEY_SIZE, ATCA_KDF_MAX_MSG_SIZE,
+    ATCA_KEY_SIZE, ATCA_LOCK_ZONE_CONFIG, ATCA_LOCK_ZONE_DATA, ATCA_NONCE_NUMIN_SIZE,
+    ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SERIAL_NUM_SIZE, ATCA_SHA2_256_DIGEST_SIZE,
+    ATCA_SIG_SIZE, ATCA_ZONE_DATA, SHA_MODE_TARGET_TEMPKEY,
 };
 
 mod aes_ccm;
 mod aes_cipher;
 mod aes_gcm;
 mod c2rust;
+mod ecdh;
 mod kdf;
 mod mac;
 mod rust2c;
@@ -253,6 +253,16 @@ impl AteccDeviceTrait for AteccDevice {
     ) -> Result<KdfResult, AtcaStatus> {
         self.kdf(algorithm, parameters, message, message_length)
     } // AteccDevice::kdf()
+
+    /// Function for generating premaster secret key using ECDH
+    /// Trait implementation
+    fn ecdh(
+        &self,
+        parameters: EcdhParams,
+        peer_public_key: &[u8],
+    ) -> Result<EcdhResult, AtcaStatus> {
+        self.ecdh(parameters, peer_public_key)
+    } // AteccDevice::ecdh()
 
     /// Request ATECC to return own device type
     /// Trait implementation
@@ -658,7 +668,9 @@ impl AteccDevice {
 
         match key_type {
             KeyType::P256EccKey => {
-                if !self.slots[slot_id as usize].config.is_secret {
+                if (slot_id < ATCA_ATECC_SLOTS_COUNT)
+                    && !self.slots[slot_id as usize].config.is_secret
+                {
                     return AtcaStatus::AtcaBadParam;
                 }
                 AtcaStatus::from(unsafe {
@@ -722,7 +734,7 @@ impl AteccDevice {
         if self.check_that_configuration_is_not_locked(true) {
             return AtcaStatus::AtcaNotLocked;
         }
-        if slot_id >= ATCA_ATECC_SLOTS_COUNT {
+        if slot_id > ATCA_ATECC_SLOTS_COUNT {
             return AtcaStatus::AtcaInvalidId;
         };
         match key_type {
@@ -740,10 +752,25 @@ impl AteccDevice {
         if self.check_that_configuration_is_not_locked(true) {
             return AtcaStatus::AtcaNotLocked;
         }
+
+        public_key.resize(ATCA_ATECC_PUB_KEY_SIZE, 0);
+
+        if slot_id == ATCA_ATECC_SLOTS_COUNT {
+            return AtcaStatus::from(unsafe {
+                let _guard = self
+                    .api_mutex
+                    .lock()
+                    .expect("Could not lock atcab API mutex");
+                cryptoauthlib_sys::atcab_get_pubkey(
+                    ATCA_ATECC_TEMPKEY_KEYID,
+                    public_key.as_mut_ptr(),
+                )
+            });
+        }
+
         if self.slots[slot_id as usize].config.key_type != KeyType::P256EccKey {
             return AtcaStatus::AtcaBadParam;
         }
-        public_key.resize(ATCA_ATECC_PUB_KEY_SIZE, 0);
 
         if self.slots[slot_id as usize].config.is_secret {
             if self.slots[slot_id as usize].config.pub_info
@@ -1416,6 +1443,10 @@ impl AteccDevice {
     fn read_aes_key_from_slot(&self, slot_id: u8, key: &mut Vec<u8>) -> AtcaStatus {
         const BLOCK_IDX: u8 = 0;
 
+        if slot_id >= ATCA_ATECC_SLOTS_COUNT {
+            return AtcaStatus::AtcaInvalidId;
+        };
+
         let slot_data = self.slots[slot_id as usize].config;
         if KeyType::Aes != slot_data.key_type {
             return AtcaStatus::AtcaBadParam;
@@ -1434,6 +1465,10 @@ impl AteccDevice {
 
     /// Function that reads a key of the 'ShaOrText' type from the indicated slot
     fn read_sha_or_text_key_from_slot(&self, slot_id: u8, data: &mut [u8]) -> AtcaStatus {
+        if slot_id >= ATCA_ATECC_SLOTS_COUNT {
+            return AtcaStatus::AtcaInvalidId;
+        };
+
         let slot_data = self.slots[slot_id as usize].config;
         if KeyType::ShaOrText != slot_data.key_type {
             return AtcaStatus::AtcaBadParam;
@@ -1475,11 +1510,7 @@ impl AteccDevice {
         if slot_id > ATCA_ATECC_SLOTS_COUNT {
             return Err(AtcaStatus::AtcaInvalidId);
         }
-        // First condition is a special situation when
-        // an 'ShaOrText' or AES key can be generated in an ATECC TempKey slot.
-        if ((ATCA_ATECC_SLOTS_COUNT == slot_id)
-            && !((key_type == KeyType::Aes) || (key_type == KeyType::ShaOrText)))
-            || ((key_type == KeyType::Aes) && !self.chip_options.aes_enabled)
+        if ((key_type == KeyType::Aes) && !self.chip_options.aes_enabled)
             || ((slot_id < ATCA_ATECC_SLOTS_COUNT)
                 && (key_type != self.slots[slot_id as usize].config.key_type))
         {

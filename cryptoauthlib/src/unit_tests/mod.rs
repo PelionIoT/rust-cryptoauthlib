@@ -4,18 +4,18 @@ use serial_test::serial;
 // Types
 use super::{
     AeadAlgorithm, AeadParam, AtcaDeviceType, AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaSlot,
-    AtcaStatus, AteccDevice, CipherAlgorithm, CipherParam, HkdfDetails, HkdfMsgLoc, InfoCmdType,
-    KdfAlgorithm, KdfParams, KdfPrfKeyLen, KdfPrfTargetLen, KdfSource, KdfTarget, KeyType,
-    MacAlgorithm, MacParam, NonceTarget, PrfDetails, SignEcdsaParam, SignMode, VerifyEcdsaParam,
-    VerifyMode,
+    AtcaStatus, AteccDevice, CipherAlgorithm, CipherParam, EcdhParams, EcdhSource, EcdhTarget,
+    HkdfDetails, HkdfMsgLoc, InfoCmdType, KdfAlgorithm, KdfParams, KdfPrfKeyLen, KdfPrfTargetLen,
+    KdfSource, KdfTarget, KeyType, MacAlgorithm, MacParam, NonceTarget, PrfDetails, SignEcdsaParam,
+    SignMode, VerifyEcdsaParam, VerifyMode,
 };
 // Constants
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_AES_GCM_IV_STD_LENGTH, ATCA_AES_KEY_SIZE,
     ATCA_ATECC_CONFIG_BUFFER_SIZE, ATCA_ATECC_PUB_KEY_SIZE, ATCA_ATECC_SLOTS_COUNT,
-    ATCA_ATECC_TEMPKEY_KEYID, ATCA_BLOCK_SIZE, ATCA_KEY_SIZE, ATCA_NONCE_NUMIN_SIZE,
-    ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE, ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE,
-    ATCA_ZONE_CONFIG, KDF_MAX_MSG_SIZE,
+    ATCA_ATECC_TEMPKEY_KEYID, ATCA_BLOCK_SIZE, ATCA_ECDH_KEY_SIZE, ATCA_KDF_MAX_MSG_SIZE,
+    ATCA_KEY_SIZE, ATCA_NONCE_NUMIN_SIZE, ATCA_NONCE_SIZE, ATCA_RANDOM_BUFFER_SIZE,
+    ATCA_SHA2_256_DIGEST_SIZE, ATCA_SIG_SIZE, ATCA_ZONE_CONFIG,
 };
 // Functions
 use super::setup_atecc_device;
@@ -34,6 +34,8 @@ mod hw_backend_aes_cipher_stream;
 mod hw_backend_aes_gcm;
 #[cfg(not(feature = "software-backend"))]
 mod hw_backend_common;
+#[cfg(not(feature = "software-backend"))]
+mod hw_backend_ecdh;
 #[cfg(not(feature = "software-backend"))]
 mod hw_backend_kdf;
 #[cfg(not(feature = "software-backend"))]

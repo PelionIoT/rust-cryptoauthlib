@@ -1,11 +1,12 @@
 use serde::Deserialize;
+use std::cmp::max;
 use std::fs::read_to_string;
 use std::path::Path;
 
 // Types
 use super::{AtcaIface, AtcaIfaceCfg, AtcaIfaceI2c, AtcaStatus, AteccDevice};
 // Constants
-use super::{ATCA_KEY_SIZE, ATCA_ZONE_CONFIG};
+use super::{ATCA_BLOCK_SIZE, ATCA_KEY_SIZE, ATCA_ZONE_CONFIG};
 // Functions
 use super::setup_atecc_device;
 
@@ -48,6 +49,40 @@ pub(crate) fn is_chip_version_608(device: &AteccDevice) -> Result<bool, AtcaStat
         AtcaStatus::AtcaSuccess => Ok((data[INDEX_OF_REV] & 0xF0) == 0x60),
         _ => Err(result_dev_type),
     }
+}
+
+pub(crate) fn io_decrypt(device: &AteccDevice, message: &mut [u8], nonce: &[u8]) -> AtcaStatus {
+    const CHUNK: usize = ATCA_BLOCK_SIZE / 2;
+
+    if !((nonce.len() == (CHUNK * 2)) || (nonce.len() == CHUNK))
+        || !((message.len() == (CHUNK * 4))
+            || (message.len() == (CHUNK * 2))
+            || (message.len() == CHUNK))
+    {
+        return AtcaStatus::AtcaBadParam;
+    }
+
+    let mut digest: Vec<u8> = Vec::new();
+    let loops: usize = max(1, (message.len() / ATCA_BLOCK_SIZE) as usize);
+    let max_idx: usize = ((message.len() >= ATCA_BLOCK_SIZE) as usize + 1) * CHUNK;
+
+    for i in 0..loops {
+        let start_pos_nonce: usize = i * CHUNK;
+        let start_pos_data: usize = start_pos_nonce * 2;
+        let mut buffer: Vec<u8> = WRITE_KEY.to_vec();
+        buffer.extend_from_slice(&nonce[start_pos_nonce..(start_pos_nonce + CHUNK)]);
+
+        let result = device.sha(buffer, &mut digest);
+        if AtcaStatus::AtcaSuccess != result {
+            return result;
+        };
+
+        for idx in 0..max_idx {
+            message[start_pos_data + idx] ^= digest[idx];
+        }
+    }
+
+    AtcaStatus::AtcaSuccess
 }
 
 fn iface_setup(config_file: String) -> Result<AtcaIfaceCfg, String> {

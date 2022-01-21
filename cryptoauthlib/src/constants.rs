@@ -45,52 +45,6 @@ pub const ATCA_NONCE_SIZE: usize = cryptoauthlib_sys::OUTNONCE_SIZE as usize;
 /// Size (in bytes) of ECDSA signature
 pub const ATCA_SIG_SIZE: usize = cryptoauthlib_sys::ATCA_SIG_SIZE as usize;
 /// KDF max message size
-pub const KDF_MAX_MSG_SIZE: usize = 0x7F;
-/// KDF mode PRF algorithm
-pub const KDF_MODE_ALG_PRF: u8 = 0x00;
-/// KDF mode AES algorithm
-pub const KDF_MODE_ALG_AES: u8 = 0x20;
-/// KDF mode HKDF algorithm
-pub const KDF_MODE_ALG_HKDF: u8 = 0x40;
-/// KDF mode source key in TempKey
-pub const KDF_MODE_SOURCE_TEMPKEY: u8 = 0x00;
-/// KDF mode source key in upper TempKey
-pub const KDF_MODE_SOURCE_TEMPKEY_UP: u8 = 0x01;
-/// KDF mode source key in a slot
-pub const KDF_MODE_SOURCE_SLOT: u8 = 0x02;
-/// KDF mode source key in alternate key buffer
-pub const KDF_MODE_SOURCE_ALTKEYBUF: u8 = 0x03;
-/// KDF mode target key in TempKey
-pub const KDF_MODE_TARGET_TEMPKEY: u8 = 0x00;
-/// KDF mode target key in upper TempKey
-pub const KDF_MODE_TARGET_TEMPKEY_UP: u8 = 0x04;
-/// KDF mode target key in slot
-pub const KDF_MODE_TARGET_SLOT: u8 = 0x08;
-/// KDF mode target key in alternate key buffer
-pub const KDF_MODE_TARGET_ALTKEYBUF: u8 = 0x0C;
-/// KDF mode target key in output buffer
-pub const KDF_MODE_TARGET_OUTPUT: u8 = 0x10;
-/// KDF mode target key encrypted in output buffer
-pub const KDF_MODE_TARGET_OUTPUT_ENC: u8 = 0x14;
-/// KDF details for PRF, source key length is 16 bytes
-pub const KDF_DETAILS_PRF_KEY_LEN_16: u32 = 0x00000000;
-/// KDF details for PRF, source key length is 32 bytes
-pub const KDF_DETAILS_PRF_KEY_LEN_32: u32 = 0x00000001;
-/// KDF details for PRF, source key length is 48 bytes
-pub const KDF_DETAILS_PRF_KEY_LEN_48: u32 = 0x00000002;
-/// KDF details for PRF, source key length is 64 bytes
-pub const KDF_DETAILS_PRF_KEY_LEN_64: u32 = 0x00000003;
-/// KDF details for PRF, target length is 32 bytes
-pub const KDF_DETAILS_PRF_TARGET_LEN_32: u32 = 0x00000000;
-/// KDF details for PRF, target length is 64 bytes
-pub const KDF_DETAILS_PRF_TARGET_LEN_64: u32 = 0x00000100;
-/// KDF details for HKDF, message location in slot
-pub const KDF_DETAILS_HKDF_MSG_LOC_SLOT: u32 = 0x00000000;
-/// KDF details for HKDF, message location in TempKey
-pub const KDF_DETAILS_HKDF_MSG_LOC_TEMPKEY: u32 = 0x00000001;
-/// KDF details for HKDF, message location in input parameter
-pub const KDF_DETAILS_HKDF_MSG_LOC_INPUT: u32 = 0x00000002;
-/// KDF details for HKDF, message location is a special IV function
-pub const KDF_DETAILS_HKDF_MSG_LOC_IV: u32 = 0x00000003;
-/// KDF details for HKDF, key is 32 bytes of zero
-pub const KDF_DETAILS_HKDF_ZERO_KEY: u32 = 0x00000004;
+pub const ATCA_KDF_MAX_MSG_SIZE: usize = 0x7F;
+/// ECDH output data size
+pub const ATCA_ECDH_KEY_SIZE: usize = cryptoauthlib_sys::ECDH_KEY_SIZE as usize;
