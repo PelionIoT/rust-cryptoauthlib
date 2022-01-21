@@ -550,15 +550,15 @@ impl AteccDevice {
             atecc_device.release();
             return Err(format!(
                 "{} type ATECC608x,\nand you have chosen \u{001b}[31m{}\u{001b}[33m !\u{001b}[0m\n\n",
-                err_str.to_string(),
-                chip_type.to_string()
+                err_str,
+                chip_type
             ));
         }
         if !atecc_device.chip_options.aes_enabled && (chip_type == AtcaDeviceType::ATECC608A) {
             atecc_device.release();
             return Err(format!(
                 "{} of a different type than the \u{001b}[31mATECC608x\u{001b}[33m you selected !\u{001b}[0m\n\n",
-                err_str.to_string()
+                err_str
             ));
         }
 

@@ -425,7 +425,7 @@ impl AteccDevice {
             _ => {
                 let err = format!(
                     "Software implementation of an AteccDevice does not support interface {}",
-                    r_iface_cfg.iface_type.to_string()
+                    r_iface_cfg.iface_type
                 );
                 return Err(err);
             }
@@ -439,7 +439,7 @@ impl AteccDevice {
             _ => {
                 let err = format!(
                     "Software implementation of an AteccDevice does not support interface {}",
-                    r_iface_cfg.devtype.to_string()
+                    r_iface_cfg.devtype
                 );
                 return Err(err);
             }

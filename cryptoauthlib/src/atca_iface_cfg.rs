@@ -21,16 +21,6 @@ impl Default for AtcaIface {
     }
 }
 
-impl Default for AtcaIfaceI2c {
-    fn default() -> AtcaIfaceI2c {
-        AtcaIfaceI2c {
-            slave_address: 0u8,
-            bus: 0u8,
-            baud: 0u32,
-        }
-    }
-}
-
 impl AtcaIfaceCfg {
     pub fn set_iface_type(mut self, iface_type: String) -> AtcaIfaceCfg {
         self.iface_type = match iface_type.as_str() {

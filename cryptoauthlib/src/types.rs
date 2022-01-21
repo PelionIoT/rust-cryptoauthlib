@@ -59,6 +59,7 @@ pub struct SignEcdsaParam {
 }
 
 /// Detailed parameters of calling the ECDSA verification function
+#[derive(Default)]
 pub struct VerifyEcdsaParam {
     /// Public key for ExternalMac mode 
     pub public_key: Option<Vec<u8>>,
@@ -68,17 +69,6 @@ pub struct VerifyEcdsaParam {
     pub num_in: Vec<u8>,
     /// IO protection key for verifying the validation MAC
     pub io_key: u8,
-}
-
-impl Default for VerifyEcdsaParam {
-    fn default() -> VerifyEcdsaParam {
-        VerifyEcdsaParam {
-            public_key: None,
-            slot_number: None,
-            num_in: Vec::new(),
-            io_key: 0x00,
-        }
-    }
 }
 
 /// Cipher operation type
@@ -114,7 +104,7 @@ pub enum CipherAlgorithm {
 }
 
 /// Cipher algorithm parameters for compute
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct CipherParam {
     /// IV - Initialization Vector.
     /// For CTR mode it is concatenation of nonce and initial counter value.
@@ -126,16 +116,6 @@ pub struct CipherParam {
     pub key: Option<Vec<u8>>,
 }
 
-impl Default for CipherParam {
-    fn default() -> CipherParam {
-        CipherParam {
-            iv: None,
-            counter_size: None,
-            key: None,
-        }
-    }
-}
-
 /// Type of AEAD algorithm
 #[derive(Clone, Debug, PartialEq)]
 pub enum AeadAlgorithm {
@@ -144,7 +124,7 @@ pub enum AeadAlgorithm {
 }
 
 /// AEAD algorithm parameters for compute
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct AeadParam {
     /// Nonce [number used once aka IV] (default length is 12 bytes)
     pub nonce: Vec<u8>,
@@ -159,18 +139,6 @@ pub struct AeadParam {
     pub additional_data: Option<Vec<u8>>,
 }
 
-impl Default for AeadParam {
-    fn default() -> AeadParam {
-        AeadParam {
-            nonce: Vec::new(),
-            key: None,
-            tag: None,
-            tag_length: None,
-            additional_data: None,
-        }
-    }
-}
-
 /// MAC algorithm to compute
 #[derive(Clone, Debug, PartialEq)]
 pub enum MacAlgorithm {
@@ -180,7 +148,7 @@ pub enum MacAlgorithm {
 }
 
 /// MAC algorithm parameters for compute
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct MacParam {
     /// external encryption/decryption key needed for MAC calculation
     /// when an 'AES' or 'ShaOrText' key stored in the cryptochip is not used
@@ -189,16 +157,6 @@ pub struct MacParam {
     pub mac_length: Option<u8>,
     /// MAC to verify authenticity of the provided data
     pub mac: Option<Vec<u8>>,
-}
-
-impl Default for MacParam {
-    fn default() -> MacParam {
-        MacParam {
-            key: None,
-            mac_length: None,
-            mac: None,
-        }
-    }
 }
 
 /// KDF algorithm to derive key
@@ -528,7 +486,7 @@ impl From<u8> for OutputProtectionState {
 }
 
 /// An ATECC slot
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct AtcaSlot {
     /// ATECC slot id (for diagnostic)
     pub id: u8,
@@ -539,32 +497,12 @@ pub struct AtcaSlot {
     pub config: SlotConfig,
 }
 
-impl Default for AtcaSlot {
-    fn default() -> Self {
-        AtcaSlot {
-            id: 0u8,
-            is_locked: false,
-            config: SlotConfig::default(),
-        }
-    }
-}
-
 /// An ATECC slot capacity
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct AtcaSlotCapacity {
     pub blocks: u8,
     pub last_block_bytes: u8,
     pub bytes: u16,
-}
-
-impl Default for AtcaSlotCapacity {
-    fn default() -> Self {
-        AtcaSlotCapacity {
-            blocks: 0u8,
-            last_block_bytes: 0u8,
-            bytes: 0u16,
-        }
-    }
 }
 
 /// Detailed ATECC key slot configuration
@@ -693,7 +631,7 @@ impl Default for SlotConfig {
 }
 
 /// Detailed ECC key attributes as stored in slot configuration
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct EccKeyAttr {
     /// true = The key slot contains an ECC private key and
     /// can be accessed only with the Sign, GenKey, and PrivWrite commands.
@@ -726,20 +664,8 @@ pub struct EccKeyAttr {
     pub ecdh_secret_out: bool,
 }
 
-impl Default for EccKeyAttr {
-    fn default() -> Self {
-        EccKeyAttr {
-            is_private: false,
-            ext_sign: false,
-            int_sign: false,
-            ecdh_operation: false,
-            ecdh_secret_out: false,
-        }
-    }
-}
-
 /// Detailed ATECC key slot read attributes
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct ReadKey {
     /// true = Reads from this slot will be encrypted using the procedure
     /// specified in the Read command using value of 'slot_number'
@@ -756,15 +682,6 @@ pub struct ReadKey {
     /// unless the CheckMac copy operation is explicitly desired,
     /// regardless of any other read/write restrictions.
     pub slot_number: u8,
-}
-
-impl Default for ReadKey {
-    fn default() -> Self {
-        ReadKey {
-            encrypt_read: false,
-            slot_number: 0u8,
-        }
-    }
 }
 
 /// Detailed ATECC key slot write configuration
@@ -832,7 +749,7 @@ pub union AtcaIface {
 } // pub union AtcaIface
 
 /// ATECC I2C interface details
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct AtcaIfaceI2c {
     /// ATECC I2C bus address
     slave_address: u8,
