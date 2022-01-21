@@ -5,47 +5,12 @@ use super::{
 };
 // Constants
 use super::{
-    ATCA_AES_DATA_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_BLOCK_SIZE, ATCA_NONCE_SIZE,
-    ATCA_SHA2_256_DIGEST_SIZE, KDF_MAX_MSG_SIZE,
+    ATCA_AES_DATA_SIZE, ATCA_ATECC_SLOTS_COUNT, ATCA_BLOCK_SIZE, ATCA_KDF_MAX_MSG_SIZE,
+    ATCA_NONCE_SIZE, ATCA_SHA2_256_DIGEST_SIZE,
 };
 
 use super::hw_backend_common::*;
 use serial_test::serial;
-use std::cmp::max;
-
-fn io_decrypt(device: &AteccDevice, message: &mut [u8], nonce: &[u8]) -> AtcaStatus {
-    const CHUNK: usize = ATCA_BLOCK_SIZE / 2;
-
-    if !((nonce.len() == (CHUNK * 2)) || (nonce.len() == CHUNK))
-        || !((message.len() == (CHUNK * 4))
-            || (message.len() == (CHUNK * 2))
-            || (message.len() == CHUNK))
-    {
-        return AtcaStatus::AtcaBadParam;
-    }
-
-    let mut digest: Vec<u8> = Vec::new();
-    let loops: usize = max(1, (message.len() / ATCA_BLOCK_SIZE) as usize);
-    let max_idx: usize = ((message.len() >= ATCA_BLOCK_SIZE) as usize + 1) * CHUNK;
-
-    for i in 0..loops {
-        let start_pos_nonce: usize = i * CHUNK;
-        let start_pos_data: usize = start_pos_nonce * 2;
-        let mut buffer: Vec<u8> = WRITE_KEY.to_vec();
-        buffer.extend_from_slice(&nonce[start_pos_nonce..(start_pos_nonce + CHUNK)]);
-
-        let result = device.sha(buffer, &mut digest);
-        if AtcaStatus::AtcaSuccess != result {
-            return result;
-        };
-
-        for idx in 0..max_idx {
-            message[start_pos_data + idx] ^= digest[idx];
-        }
-    }
-
-    AtcaStatus::AtcaSuccess
-}
 
 #[test]
 #[serial]
@@ -475,7 +440,7 @@ fn kdf_prf_proper_data() {
 #[test]
 #[serial]
 fn kdf_prf_bad_data() {
-    const MESSAGE_TOO_LONG: usize = KDF_MAX_MSG_SIZE + 1;
+    const MESSAGE_TOO_LONG: usize = ATCA_KDF_MAX_MSG_SIZE + 1;
     const SLOT_ID_TOO_LOW: u8 = 0x01;
     const SLOT_ID_OK: u8 = 0x09;
     const SLOT_ID_INVALID: u8 = 0x0D;
@@ -568,7 +533,7 @@ fn kdf_prf_bad_data() {
 
     let nonce_result = device.nonce(NonceTarget::TempKey, &[0x00; ATCA_BLOCK_SIZE]);
 
-    // algorithm PRF, message length > KDF_MAX_MSG_SIZE
+    // algorithm PRF, message length > ATCA_KDF_MAX_MSG_SIZE
     let bad_result_1 = device.kdf(
         algorithm_1.clone(),
         parameters_1.clone(),

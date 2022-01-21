@@ -8,8 +8,7 @@ use super::{
 
 use super::{
     ATCA_AES_DATA_SIZE, ATCA_ATECC_MIN_SLOT_IDX_FOR_PUB_KEY, ATCA_ATECC_SLOTS_COUNT,
-    ATCA_SHA2_256_DIGEST_SIZE, KDF_DETAILS_HKDF_ZERO_KEY, KDF_MAX_MSG_SIZE, KDF_MODE_ALG_AES,
-    KDF_MODE_ALG_HKDF, KDF_MODE_ALG_PRF,
+    ATCA_KDF_MAX_MSG_SIZE, ATCA_SHA2_256_DIGEST_SIZE,
 };
 
 use super::atcab_get_bit_value;
@@ -27,6 +26,10 @@ impl AteccDevice {
     ) -> Result<KdfResult, AtcaStatus> {
         const MAX_RESULT_SIZE: usize = 64;
         const HKDF_RESULT_SIZE: usize = 32;
+        const KDF_DETAILS_HKDF_ZERO_KEY: u32 = 0x00000004;
+        const KDF_MODE_ALG_PRF: u8 = 0x00;
+        const KDF_MODE_ALG_AES: u8 = 0x20;
+        const KDF_MODE_ALG_HKDF: u8 = 0x40;
 
         if self.check_that_configuration_is_not_locked(true) {
             return Err(AtcaStatus::AtcaNotLocked);
@@ -237,7 +240,7 @@ impl AteccDevice {
                 return Err(AtcaStatus::AtcaBadParam);
             }
         }
-        if (message_length > KDF_MAX_MSG_SIZE)
+        if (message_length > ATCA_KDF_MAX_MSG_SIZE)
             || (if let Some(msg) = message {
                 msg.len() < message_length
             } else {

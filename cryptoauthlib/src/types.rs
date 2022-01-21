@@ -233,10 +233,14 @@ impl Default for KdfParams {
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum KdfSource {
-    TempKey = KDF_MODE_SOURCE_TEMPKEY,
-    TempKeyUp = KDF_MODE_SOURCE_TEMPKEY_UP,
-    Slot = KDF_MODE_SOURCE_SLOT,
-    AltKeyBuf = KDF_MODE_SOURCE_ALTKEYBUF,
+    /// source key in TempKey
+    TempKey = 0x00,
+    /// source key in upper TempKey
+    TempKeyUp = 0x01,
+    /// source key in a slot
+    Slot = 0x02,
+    /// source key in alternate key buffer
+    AltKeyBuf = 0x03,
 }
 
 /// KDF targets. Possibility of exporting KDF function result outside the chip
@@ -244,30 +248,42 @@ pub enum KdfSource {
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum KdfTarget {
-    TempKey = KDF_MODE_TARGET_TEMPKEY,
-    TempKeyUp = KDF_MODE_TARGET_TEMPKEY_UP,
-    Slot = KDF_MODE_TARGET_SLOT,
-    AltKeyBuf = KDF_MODE_TARGET_ALTKEYBUF,
-    Output = KDF_MODE_TARGET_OUTPUT,
-    OutputEnc = KDF_MODE_TARGET_OUTPUT_ENC,
+    /// target key in TempKey
+    TempKey = 0x00,
+    /// target key in upper TempKey
+    TempKeyUp = 0x04,
+    /// target key in slot
+    Slot = 0x08,
+    /// target key in alternate key buffer
+    AltKeyBuf = 0x0C,
+    /// target key in output buffer
+    Output = 0x10,
+    /// target key encrypted in output buffer
+    OutputEnc = 0x14,
 }
 
 /// KDF details for PRF, source key length
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u32)]
 pub enum KdfPrfKeyLen {
-    Len16 = KDF_DETAILS_PRF_KEY_LEN_16,
-    Len32 = KDF_DETAILS_PRF_KEY_LEN_32,
-    Len48 = KDF_DETAILS_PRF_KEY_LEN_48,
-    Len64 = KDF_DETAILS_PRF_KEY_LEN_64,
+    /// source key length is 16 bytes
+    Len16 = 0x00000000,
+    /// source key length is 32 bytes
+    Len32 = 0x00000001,
+    /// source key length is 48 bytes
+    Len48 = 0x00000002,
+    /// source key length is 64 bytes
+    Len64 = 0x00000003,
 }
 
 /// KDF details for PRF, target length
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u32)]
 pub enum KdfPrfTargetLen {
-    Len32 = KDF_DETAILS_PRF_TARGET_LEN_32,
-    Len64 = KDF_DETAILS_PRF_TARGET_LEN_64,
+    /// target length is 32 bytes
+    Len32 = 0x00000000,
+    /// target length is 64 bytes
+    Len64 = 0x00000100,
 }
 
 impl From<KdfPrfTargetLen> for usize {
@@ -299,10 +315,14 @@ impl Default for PrfDetails {
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u32)]
 pub enum HkdfMsgLoc {
-    Slot = KDF_DETAILS_HKDF_MSG_LOC_SLOT,
-    TempKey = KDF_DETAILS_HKDF_MSG_LOC_TEMPKEY,
-    Input = KDF_DETAILS_HKDF_MSG_LOC_INPUT,
-    Iv =  KDF_DETAILS_HKDF_MSG_LOC_IV,
+    /// message location in slot
+    Slot = 0x00000000,
+    /// message location in TempKey
+    TempKey = 0x00000001,
+    /// message location in input parameter
+    Input = 0x00000002,
+    /// message location is a special IV function
+    Iv = 0x00000003,
 }
 
 /// KDF details for HKDF
@@ -331,6 +351,67 @@ pub struct KdfResult {
     /// Data are available only when the target of the KDF function is 'Output' or 'OutputEnc'
     pub out_data: Option<Vec<u8>>,
     /// Data are available only when the target of the KDF function is 'OutputEnc'
+    pub out_nonce: Option<Vec<u8>>,
+}
+
+/// ECDH function parameters
+#[derive(Clone, Debug, PartialEq)]
+pub struct EcdhParams {
+    /// private key source for ECDH
+    pub key_source: EcdhSource,
+    /// target where the result of the ECDH operation will be placed
+    pub out_target: EcdhTarget,
+    /// parameter that specifies whether the output should be encrypted
+    /// (only relevant for the ATECC608x chip)
+    pub out_encrypt: bool,
+    /// slot number where the private key will be retrieved
+    /// or where result of the ECDH operation will be placed
+    pub slot_id: Option<u8>,
+}
+
+impl Default for EcdhParams {
+    fn default() -> EcdhParams {
+        EcdhParams {
+            key_source: EcdhSource::Slot,
+            out_target: EcdhTarget::Compatibility,
+            out_encrypt: false,
+            slot_id: None,
+        }
+    }
+}
+
+/// Private key source for ECDH
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u8)]
+pub enum EcdhSource{
+    /// source key in a slot
+    Slot = 0x00,
+    /// source key in TempKey (only relevant for the ATECC608x chip)
+    TempKey = 0x01,
+}
+
+/// Target where the result of the ECDH operation will be placed
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u8)]
+pub enum EcdhTarget {
+    /// Compatibility mode for ATECC508A. Result goes to either the output buffer
+    /// or (slot_id + 1) depending on the state of slots[slot_idx].config.ecc_key_attr.ecdh_secret_out
+    Compatibility = 0x00,
+    /// Result goes to slot specified by KeyID. slots[slot_idx].write_config must be ALWAYS
+    /// (only relevant for the ATECC608x chip)
+    Slot  = 0x04,
+    /// Result goes to TempKey (only relevant for the ATECC608x chip)
+    TempKey = 0x08,
+    /// Result goes to the output buffer (only relevant for the ATECC608x chip)
+    Output = 0x0C,
+}
+
+/// ECDH result structure
+#[derive(Clone, Debug, PartialEq)]
+pub struct EcdhResult {
+    /// Computed ECDH pre-master secret (32 bytes) if returned directly
+    pub pms: Option<Vec<u8>>,
+    /// Nonce used to encrypt pre-master secret
     pub out_nonce: Option<Vec<u8>>,
 }
 

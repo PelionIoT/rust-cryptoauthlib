@@ -137,7 +137,7 @@ fn gen_key() {
     let mut expected_device_gen_key_ok_3 = AtcaStatus::AtcaSuccess;
     let mut expected_device_gen_key_bad_1 = AtcaStatus::AtcaInvalidId;
     let mut expected_device_gen_key_bad_2 = AtcaStatus::AtcaBadParam;
-    let mut expected_device_gen_key_bad_3 = AtcaStatus::AtcaBadParam;
+    let mut expected_device_gen_key_bad_3 = AtcaStatus::AtcaInvalidId;
     let mut expected_device_gen_key_bad_4 = AtcaStatus::AtcaBadParam;
 
     if !device.is_configuration_locked() {
@@ -169,7 +169,7 @@ fn gen_key() {
     let device_gen_key_ok_3 = device.gen_key(KeyType::Aes, 0x04);
     let device_gen_key_bad_1 = device.gen_key(KeyType::Aes, ATCA_ATECC_SLOTS_COUNT + 1);
     let device_gen_key_bad_2 = device.gen_key(KeyType::Aes, 0x00);
-    let device_gen_key_bad_3 = device.gen_key(KeyType::P256EccKey, ATCA_ATECC_SLOTS_COUNT);
+    let device_gen_key_bad_3 = device.gen_key(KeyType::P256EccKey, ATCA_ATECC_SLOTS_COUNT + 1);
     let device_gen_key_bad_4 = device.gen_key(KeyType::ShaOrText, 0x00);
 
     assert_eq!(device.release().to_string(), "AtcaSuccess");
