@@ -199,6 +199,22 @@ impl AteccDeviceTrait for AteccDevice {
             _ => Err(self.default_dev_status()),
         }
     }
+    /// Execute this command prevents future modifications of the Configuration zone.
+    fn lock_config_zone(&self) -> AtcaStatus {
+        self.default_dev_status()
+    } // AteccDevice::lock_config_zone()
+    /// Execute this command prevents future modifications of the Data and OTP zones.
+    fn lock_data_zone(&self) -> AtcaStatus {
+        self.default_dev_status()
+    } // AteccDevice::lock_data_zone()
+    /// Lock an individual slot in the data zone on an ATECC device. Not available for ATSHA devices.
+    fn lock_slot(&self, _slot_id: u8) -> AtcaStatus {
+        self.default_dev_status()
+    } // AteccDevice::lock_slot()
+    /// Function for uploading configuration to the chip.
+    fn load_config_into_chip(&self, _config: &[u8]) -> AtcaStatus {
+        self.default_dev_status()
+    } // AteccDevice::load_config_into_chip()
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType {
         self.dev_type
