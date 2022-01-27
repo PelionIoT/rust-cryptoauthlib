@@ -114,6 +114,21 @@ pub trait AteccDeviceTrait {
         parameters: EcdhParams,
         peer_public_key: &[u8],
     ) -> Result<EcdhResult, AtcaStatus>;
+    /// Execute this command prevents future modifications of the Configuration zone.
+    /// This command fails if the designated area is already locked.
+    fn lock_config_zone(&self) -> AtcaStatus;
+    /// Execute this command prevents future modifications of the Data and OTP zones.
+    /// This command fails if the designated area is already locked.
+    fn lock_data_zone(&self) -> AtcaStatus;
+    /// Lock an individual slot in the data zone on an ATECC device. Not available for ATSHA devices.
+    /// Slot must be configured to be slot lockable slots[slot_idx].config.lockable = true.
+    /// This command fails if the designated area is already locked.
+    fn lock_slot(&self, slot_id: u8) -> AtcaStatus;
+    /// Function for uploading configuration to the chip.
+    /// First 16 bytes of data are skipped as they are not writable. LockValue and LockConfig
+    /// are also skipped and can only be changed via the Lock command.
+    /// This command may fail if UserExtra and/or Selector bytes have already been set to non-zero values.
+    fn load_config_into_chip(&self, config: &[u8]) -> AtcaStatus;
     /// Request ATECC to return own device type
     fn get_device_type(&self) -> AtcaDeviceType;
     /// Request ATECC to check if its configuration is locked.
