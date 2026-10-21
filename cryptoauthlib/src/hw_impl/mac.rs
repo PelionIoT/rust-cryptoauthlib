@@ -74,7 +74,7 @@ impl AteccDevice {
                 .expect("Could not lock atcab API mutex");
             cryptoauthlib_sys::atcab_sha_hmac(
                 data.as_ptr(),
-                data.len() as u64,
+                data.len(),
                 slot,
                 mac.as_mut_ptr(),
                 SHA_MODE_TARGET_TEMPKEY,
