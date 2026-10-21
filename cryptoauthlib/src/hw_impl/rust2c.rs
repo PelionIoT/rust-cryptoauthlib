@@ -10,7 +10,7 @@ impl TryFrom<super::AtcaIfaceCfg> for cryptoauthlib_sys::ATCAIfaceCfg {
             super::AtcaIfaceType::AtcaI2cIface => cryptoauthlib_sys::ATCAIfaceCfg__bindgen_ty_1 {
                 atcai2c: match rust_iface_cfg.iface {
                     Some(x) => cryptoauthlib_sys::ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_1 {
-                        slave_address: unsafe { x.atcai2c.slave_address },
+                        address: unsafe { x.atcai2c.address },
                         bus: unsafe { x.atcai2c.bus },
                         baud: unsafe { x.atcai2c.baud },
                     },

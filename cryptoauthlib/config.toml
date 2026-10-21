@@ -5,7 +5,7 @@ wake_delay = 1600
 rx_retries = 20
 
 [interface]
-slave_address = 0xC0
+address = 0xC0
 # bus = 2
 # bus 1 should work with i2c-pseudo
 bus = 1

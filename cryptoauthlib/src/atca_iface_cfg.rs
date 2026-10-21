@@ -69,8 +69,8 @@ impl AtcaIface {
 }
 
 impl AtcaIfaceI2c {
-    pub fn set_slave_address(mut self, slave_address: u8) -> AtcaIfaceI2c {
-        self.slave_address = slave_address;
+    pub fn set_address(mut self, address: u8) -> AtcaIfaceI2c {
+        self.address = address;
         self
     }
     pub fn set_bus(mut self, bus: u8) -> AtcaIfaceI2c {

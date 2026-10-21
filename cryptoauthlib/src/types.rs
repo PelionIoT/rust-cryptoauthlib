@@ -752,7 +752,7 @@ pub union AtcaIface {
 #[derive(Copy, Clone, Default)]
 pub struct AtcaIfaceI2c {
     /// ATECC I2C bus address
-    slave_address: u8,
+    address: u8,
     /// ATECC I2C bus number
     bus: u8,
     /// ATECC I2C bus baud rate
