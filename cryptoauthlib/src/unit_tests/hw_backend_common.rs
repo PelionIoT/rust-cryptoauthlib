@@ -26,7 +26,7 @@ struct Device {
 
 #[derive(Deserialize, Copy, Clone)]
 struct Interface {
-    pub slave_address: u8,
+    pub address: u8,
     pub bus: u8,
     pub baud: u32,
 }
@@ -100,7 +100,7 @@ fn iface_setup(config_file: String) -> Result<AtcaIfaceCfg, String> {
             .set_iface(
                 AtcaIface::default().set_atcai2c(
                     AtcaIfaceI2c::default()
-                        .set_slave_address(config.interface.unwrap().slave_address)
+                        .set_address(config.interface.unwrap().address)
                         .set_bus(config.interface.unwrap().bus)
                         .set_baud(config.interface.unwrap().baud),
                 ),

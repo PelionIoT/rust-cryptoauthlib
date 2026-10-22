@@ -10,7 +10,7 @@ impl TryFrom<super::AtcaIfaceCfg> for cryptoauthlib_sys::ATCAIfaceCfg {
             super::AtcaIfaceType::AtcaI2cIface => cryptoauthlib_sys::ATCAIfaceCfg__bindgen_ty_1 {
                 atcai2c: match rust_iface_cfg.iface {
                     Some(x) => cryptoauthlib_sys::ATCAIfaceCfg__bindgen_ty_1__bindgen_ty_1 {
-                        slave_address: unsafe { x.atcai2c.slave_address },
+                        address: unsafe { x.atcai2c.address },
                         bus: unsafe { x.atcai2c.bus },
                         baud: unsafe { x.atcai2c.baud },
                     },
@@ -49,12 +49,12 @@ impl From<super::AtcaIfaceType> for cryptoauthlib_sys::ATCAIfaceType {
 impl From<super::AtcaDeviceType> for cryptoauthlib_sys::ATCADeviceType {
     fn from(rust_iface_devtype: super::AtcaDeviceType) -> Self {
         match rust_iface_devtype {
-            super::AtcaDeviceType::ATSHA204A => cryptoauthlib_sys::ATCADeviceType_ATSHA204A,
-            super::AtcaDeviceType::ATECC108A => cryptoauthlib_sys::ATCADeviceType_ATECC108A,
-            super::AtcaDeviceType::ATECC508A => cryptoauthlib_sys::ATCADeviceType_ATECC508A,
-            super::AtcaDeviceType::ATECC608A => cryptoauthlib_sys::ATCADeviceType_ATECC608A,
-            super::AtcaDeviceType::ATSHA206A => cryptoauthlib_sys::ATCADeviceType_ATSHA206A,
-            _ => cryptoauthlib_sys::ATCADeviceType_ATCA_DEV_UNKNOWN,
+            super::AtcaDeviceType::ATSHA204A => cryptoauthlib_sys::ATSHA204A as cryptoauthlib_sys::ATCADeviceType,
+            super::AtcaDeviceType::ATECC108A => cryptoauthlib_sys::ATECC108A as cryptoauthlib_sys::ATCADeviceType,
+            super::AtcaDeviceType::ATECC508A => cryptoauthlib_sys::ATECC508A as cryptoauthlib_sys::ATCADeviceType,
+            super::AtcaDeviceType::ATECC608A => cryptoauthlib_sys::ATECC608A as cryptoauthlib_sys::ATCADeviceType,
+            super::AtcaDeviceType::ATSHA206A => cryptoauthlib_sys::ATSHA206A as cryptoauthlib_sys::ATCADeviceType,
+            _ => cryptoauthlib_sys::ATCA_DEV_UNKNOWN as cryptoauthlib_sys::ATCADeviceType,
         }
     }
 }

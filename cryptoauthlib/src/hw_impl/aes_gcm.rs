@@ -177,7 +177,7 @@ impl AteccDevice {
                 slot,
                 BLOCK_IDX,
                 iv.as_ptr(),
-                iv.len() as u64,
+                iv.len(),
             )
         });
 
@@ -312,7 +312,7 @@ impl AteccDevice {
             cryptoauthlib_sys::atcab_aes_gcm_encrypt_finish(
                 ctx_ptr,
                 tag.as_mut_ptr(),
-                tag_length as u64,
+                tag_length as usize,
             )
         });
 
@@ -345,7 +345,7 @@ impl AteccDevice {
             cryptoauthlib_sys::atcab_aes_gcm_decrypt_finish(
                 ctx_ptr,
                 tag.as_ptr(),
-                tag.len() as u64,
+                tag.len(),
                 &mut is_verified,
             )
         });
